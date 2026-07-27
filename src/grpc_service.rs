@@ -4,7 +4,7 @@ use crate::xauth_v1::{
     EndSessionResponse, ForcePasswordChangeRequest, ForcePasswordChangeResponse,
     OAuthRevokeRequest, OAuthRevokeResponse, OAuthTokenRequest, OAuthTokenResponse,
     PlayerInfoRequest, PlayerInfoResponse, PluginEvent, SessionRequest, SessionResponse,
-    auth_step_response::NextAction, core_command::CommandType,
+    core_command::CommandType,
 };
 use crate::db::UserRepository;
 use std::collections::HashMap;
@@ -73,15 +73,15 @@ impl AuthService for XAuthCoreService {
         let req = request.into_inner();
         let repo = UserRepository::new(self.db.clone());
 
-        match req.r#type {
-            0 => {
+        match req.step_type.as_str() {
+            "password" => {
                 let user = match repo.get_user_by_name(&req.username).await {
                     Ok(Some(u)) => u,
                     Ok(None) => {
                         return Ok(Response::new(AuthStepResponse {
                             success: false,
                             message: "User not found.".into(),
-                            next_action: NextAction::RequireRegister as i32,
+                            next_action: "require_register".into(),
                             session_token: "".into(),
                         }));
                     },
@@ -97,7 +97,7 @@ impl AuthService for XAuthCoreService {
                         Ok(Response::new(AuthStepResponse {
                             success: true,
                             message: "Enter 2FA code from Telegram (/confirm <code>).".into(),
-                            next_action: NextAction::Require2fa as i32,
+                            next_action: "require_2fa".into(),
                             session_token: "".into(),
                         }))
                     } else {
@@ -108,7 +108,7 @@ impl AuthService for XAuthCoreService {
                         Ok(Response::new(AuthStepResponse {
                             success: true,
                             message: "Successfully authenticated!".into(),
-                            next_action: NextAction::Authenticated as i32,
+                            next_action: "authenticated".into(),
                             session_token: token,
                         }))
                     }
@@ -117,12 +117,12 @@ impl AuthService for XAuthCoreService {
                     Ok(Response::new(AuthStepResponse {
                         success: false,
                         message: "Invalid password!".into(),
-                        next_action: NextAction::RequirePassword as i32,
+                        next_action: "require_password".into(),
                         session_token: "".into(),
                     }))
                 }
             },
-            1 => {
+            "register" => {
                 let hash = crate::hash::hash_password(&req.input_data, &self.settings.password_hashing)
                     .map_err(|_| Status::internal("Hash failed"))?;
                 
@@ -137,7 +137,7 @@ impl AuthService for XAuthCoreService {
                 Ok(Response::new(AuthStepResponse {
                     success: true,
                     message: "Registration successful! You are authenticated.".into(),
-                    next_action: NextAction::Authenticated as i32,
+                    next_action: "authenticated".into(),
                     session_token: token,
                 }))
             },
