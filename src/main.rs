@@ -8,6 +8,7 @@ use tracing::info;
 mod db;
 mod grpc_service;
 mod hash;
+mod jwt;
 mod migrator;
 
 pub mod xauth_v1 {
