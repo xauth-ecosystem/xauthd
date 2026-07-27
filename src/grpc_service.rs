@@ -11,7 +11,7 @@ use sqlx::SqlitePool;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
-use tracing::{info, warn};
+use tracing::info;
 
 pub struct XAuthCoreService {
     pool: SqlitePool,
@@ -32,7 +32,7 @@ impl AuthService for XAuthCoreService {
         request: Request<Streaming<PluginEvent>>,
     ) -> Result<Response<Self::ConnectServerStream>, Status> {
         let mut in_stream = request.into_inner();
-        let (tx, rx) = mpsc::channel(100);
+        let (_tx, rx) = mpsc::channel(100);
 
         tokio::spawn(async move {
             while let Ok(Some(event)) = in_stream.message().await {
@@ -122,11 +122,11 @@ impl AuthService for XAuthCoreService {
         Err(Status::unimplemented("Not implemented yet"))
     }
 
-    async fn generate_oauth_token(&self, _: Request<OAuthTokenRequest>) -> Result<Response<OAuthTokenResponse>, Status> {
+    async fn generate_o_auth_token(&self, _: Request<OAuthTokenRequest>) -> Result<Response<OAuthTokenResponse>, Status> {
         Err(Status::unimplemented("Not implemented yet"))
     }
 
-    async fn revoke_oauth_token(&self, _: Request<OAuthRevokeRequest>) -> Result<Response<OAuthRevokeResponse>, Status> {
+    async fn revoke_o_auth_token(&self, _: Request<OAuthRevokeRequest>) -> Result<Response<OAuthRevokeResponse>, Status> {
         Err(Status::unimplemented("Not implemented yet"))
     }
 
