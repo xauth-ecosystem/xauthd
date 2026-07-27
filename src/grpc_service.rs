@@ -127,8 +127,13 @@ impl AuthService for XAuthCoreService {
         }))
     }
     
-    async fn end_session(&self, _: Request<EndSessionRequest>) -> Result<Response<EndSessionResponse>, Status> {
-        Err(Status::unimplemented("Not implemented yet"))
+    async fn end_session(&self, request: Request<EndSessionRequest>) -> Result<Response<EndSessionResponse>, Status> {
+        let _req = request.into_inner();
+        
+        // TODO: Invalidate token in database or add to blacklist
+        Ok(Response::new(EndSessionResponse {
+            success: true,
+        }))
     }
 
     async fn generate_o_auth_token(&self, _: Request<OAuthTokenRequest>) -> Result<Response<OAuthTokenResponse>, Status> {
