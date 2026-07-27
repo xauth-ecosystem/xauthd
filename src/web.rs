@@ -156,7 +156,7 @@ async fn consent_get(Query(q): Query<LoginQuery>) -> impl IntoResponse {
 
 async fn consent_post(Form(f): Form<ConsentForm>) -> impl IntoResponse {
     if f.action == "approve" {
-        let code = "dummy_auth_code_123";
+        let code = crate::jwt::generate_jwt(&f.client_id, "super_secret_key_change_me", 600).unwrap_or_else(|_| "fallback_code".into());
         let url = format!("{}?code={}&state={}", f.redirect_uri, code, f.state);
         axum::response::Redirect::to(&url).into_response()
     } else {
