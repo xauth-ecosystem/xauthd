@@ -384,7 +384,7 @@ async fn revoke_post(State(state): State<AppState>, Form(req): Form<RevokeReques
         revoked.insert(claims.jti);
     }
     
-    axum::http::StatusCode::OK
+    axum::http::StatusCode::OK.into_response()
 }
 
 async fn jwks_get(State(state): State<AppState>) -> impl IntoResponse {
