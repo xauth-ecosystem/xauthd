@@ -38,3 +38,5 @@ secret = "super_secret_key_change_me_to_something_random"
 # Path to the RSA private key used for OIDC/JWKS asymmetric signing
 # If the file does not exist, the daemon will automatically generate it at this location.
 rsa_private_key_path = "private_key.pem"
+# Lifespan of a regular in-game session token (Auto-Login duration) in seconds. Default: 86400 (24 hours).
+session_ttl = 86400
