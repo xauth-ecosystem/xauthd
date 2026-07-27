@@ -40,6 +40,26 @@ pub mod token_blacklist {
     impl ActiveModelBehavior for ActiveModel {}
 }
 
+pub mod oauth_clients {
+    use sea_orm::entity::prelude::*;
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "oauth_clients")]
+    pub struct Model {
+        #[sea_orm(primary_key)]
+        pub id: i64,
+        #[sea_orm(unique)]
+        pub client_id: String,
+        pub client_secret: String,
+        pub redirect_uris: String,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
 pub struct UserRepository {
     db: DatabaseConnection,
 }
@@ -120,5 +140,19 @@ impl UserRepository {
             .one(&self.db)
             .await?;
         Ok(blacklisted.is_some())
+    }
+
+    pub async fn validate_oauth_client(&self, client_id: &str, client_secret: &str) -> Result<bool, DbErr> {
+        let client = oauth_clients::Entity::find()
+            .filter(oauth_clients::Column::ClientId.eq(client_id))
+            .one(&self.db)
+            .await?;
+            
+        if let Some(c) = client {
+            // In a real app, client_secret might be hashed. For now, strict string comparison.
+            Ok(c.client_secret == client_secret)
+        } else {
+            Ok(false)
+        }
     }
 }
