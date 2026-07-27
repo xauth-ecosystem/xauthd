@@ -317,6 +317,24 @@ async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>
     (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "invalid_grant"}))).into_response()
 }
 
+async fn user_get(headers: axum::http::HeaderMap) -> impl IntoResponse {
+    if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
+        if let Ok(auth_str) = auth_header.to_str() {
+            if auth_str.starts_with("Bearer ") {
+                let token = &auth_str["Bearer ".len()..];
+                if let Ok(claims) = crate::jwt::validate_jwt(token, "super_secret_key_change_me") {
+                    return (axum::http::StatusCode::OK, Json(serde_json::json!({
+                        "sub": claims.sub.clone(),
+                        "preferred_username": claims.sub.clone(),
+                        "name": claims.sub
+                    }))).into_response();
+                }
+            }
+        }
+    }
+    (axum::http::StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "invalid_token"}))).into_response()
+}
+
 async fn jwks_get(State(state): State<AppState>) -> impl IntoResponse {
     Json(crate::jwt::get_jwks(&state.rsa_key))
 }
@@ -346,6 +364,7 @@ pub fn router(db: DatabaseConnection) -> Router {
     Router::new()
         .route("/.well-known/openid-configuration", get(discovery_get))
         .route("/jwks", get(jwks_get))
+        .route("/user", get(user_get).post(user_get))
         .route("/authorize", get(authorize_get))
         .route("/login", post(login_post))
         .route("/login-events", get(login_events_get))
