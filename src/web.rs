@@ -11,9 +11,9 @@ use serde::Deserialize;
 #[template(path = "login.html")]
 struct LoginTemplate {
     error: Option<String>,
-    client_id: Option<String>,
-    redirect_uri: Option<String>,
-    state: Option<String>,
+    client_id: String,
+    redirect_uri: String,
+    state: String,
 }
 
 #[derive(Template)]
@@ -52,9 +52,9 @@ struct ConsentForm {
 async fn login_get(Query(q): Query<LoginQuery>) -> impl IntoResponse {
     let template = LoginTemplate {
         error: q.error,
-        client_id: q.client_id,
-        redirect_uri: q.redirect_uri,
-        state: q.state,
+        client_id: q.client_id.unwrap_or_default(),
+        redirect_uri: q.redirect_uri.unwrap_or_default(),
+        state: q.state.unwrap_or_default(),
     };
     Html(template.render().unwrap())
 }

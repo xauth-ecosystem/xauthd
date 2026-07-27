@@ -76,7 +76,7 @@
 
             <form class="ui large form" method="POST" action="/login">
                 <!-- If there's an OAuth request pending, pass its parameters -->
-                {% if let Some(client_id) = client_id %}
+                {% if !client_id.is_empty() %}
                 <input type="hidden" name="client_id" value="{{ client_id }}">
                 <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
                 <input type="hidden" name="state" value="{{ state }}">
