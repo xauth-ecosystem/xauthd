@@ -101,6 +101,11 @@ struct TokenRequest {
     code_verifier: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct IntrospectRequest {
+    token: String,
+}
+
 #[derive(Serialize)]
 struct TokenResponse {
     access_token: String,
@@ -335,6 +340,19 @@ async fn user_get(headers: axum::http::HeaderMap) -> impl IntoResponse {
     (axum::http::StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "invalid_token"}))).into_response()
 }
 
+async fn introspect_post(Form(req): Form<IntrospectRequest>) -> impl IntoResponse {
+    if let Ok(claims) = crate::jwt::validate_jwt(&req.token, "super_secret_key_change_me") {
+        return (axum::http::StatusCode::OK, Json(serde_json::json!({
+            "active": true,
+            "sub": claims.sub,
+            "exp": claims.exp,
+            "iat": claims.iat
+        }))).into_response();
+    }
+    
+    (axum::http::StatusCode::OK, Json(serde_json::json!({"active": false}))).into_response()
+}
+
 async fn jwks_get(State(state): State<AppState>) -> impl IntoResponse {
     Json(crate::jwt::get_jwks(&state.rsa_key))
 }
@@ -365,6 +383,7 @@ pub fn router(db: DatabaseConnection) -> Router {
         .route("/.well-known/openid-configuration", get(discovery_get))
         .route("/jwks", get(jwks_get))
         .route("/user", get(user_get).post(user_get))
+        .route("/introspect", post(introspect_post))
         .route("/authorize", get(authorize_get))
         .route("/login", post(login_post))
         .route("/login-events", get(login_events_get))
