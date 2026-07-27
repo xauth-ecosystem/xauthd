@@ -65,8 +65,7 @@ impl AuthService for XAuthCoreService {
                     Err(_) => return Err(Status::internal("Database error")),
                 };
 
-                // Assume password hash verification would use a field on User struct (we will define this in sea-orm Entity)
-                let hash_to_verify = &user.password_hash; // This depends on the exact field name in the Entity we will create
+                let hash_to_verify = &user.password_hash;
 
                 if crate::hash::verify_password(&req.input_data, hash_to_verify) {
                     let has_2fa = repo.is_2fa_enabled(user.id).await.unwrap_or(false);
@@ -79,7 +78,7 @@ impl AuthService for XAuthCoreService {
                             session_token: "".into(),
                         }))
                     } else {
-                        let token = "generated_jwt_or_random_string".to_string();
+                        let token = crate::jwt::generate_jwt(&user.username, "super_secret_key_change_me", 3600 * 24).unwrap_or_else(|_| "".into());
                         repo.update_last_login(user.id, &req.ip_address).await.ok();
                         
                         Ok(Response::new(AuthStepResponse {
@@ -106,11 +105,13 @@ impl AuthService for XAuthCoreService {
                 repo.create_user(&req.username, &hash).await
                     .map_err(|_| Status::already_exists("User exists"))?;
 
+                let token = crate::jwt::generate_jwt(&req.username, "super_secret_key_change_me", 3600 * 24).unwrap_or_else(|_| "".into());
+
                 Ok(Response::new(AuthStepResponse {
                     success: true,
                     message: "Registration successful! You are authenticated.".into(),
                     next_action: NextAction::Authenticated as i32,
-                    session_token: "new_token".into(),
+                    session_token: token,
                 }))
             },
             _ => Err(Status::unimplemented("This step is not supported yet")),
@@ -120,13 +121,15 @@ impl AuthService for XAuthCoreService {
     async fn validate_session(&self, request: Request<SessionRequest>) -> Result<Response<SessionResponse>, Status> {
         let req = request.into_inner();
         
-        // TODO: Decode JWT or fetch session from database once ready
-        let is_valid = !req.session_token.is_empty();
+        let (is_valid, username, expires_at) = match crate::jwt::validate_jwt(&req.session_token, "super_secret_key_change_me") {
+            Ok(claims) => (true, claims.sub, claims.exp as u64),
+            Err(_) => (false, "".into(), 0),
+        };
         
         Ok(Response::new(SessionResponse {
             is_valid,
-            username: "Player".into(), // TODO: Extract from token
-            expires_at: 0,
+            username,
+            expires_at,
         }))
     }
     
@@ -143,14 +146,16 @@ impl AuthService for XAuthCoreService {
         let req = request.into_inner();
         
         // TODO: Validate req.client_id, req.client_secret and req.code
-        // TODO: Generate actual JWT access_token and refresh_token
         let is_valid = req.client_id == "my-client-id"; // Mock validation
         
         if is_valid {
+            let access_token = crate::jwt::generate_jwt("oauth_user", "super_secret_key_change_me", 3600).unwrap_or_else(|_| "".into());
+            let refresh_token = crate::jwt::generate_jwt("oauth_user", "super_secret_key_change_me", 3600 * 24 * 7).unwrap_or_else(|_| "".into());
+
             Ok(Response::new(OAuthTokenResponse {
                 success: true,
-                access_token: "dummy_access_token".into(),
-                refresh_token: "dummy_refresh_token".into(),
+                access_token,
+                refresh_token,
                 expires_in: 3600,
                 error: "".into(),
             }))
