@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use tonic::transport::Server;
 use tracing::info;
 
+pub mod config;
 mod db;
 mod grpc_service;
 mod hash;
@@ -28,8 +29,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Starting XAuth Core Daemon...");
 
-    let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://data.sqlite?mode=rwc".to_string());
-    
+    // Load configuration (xauthd.toml + environment variables)
+    let settings = config::Settings::new().unwrap_or_else(|err| {
+        // If there's an error and it's missing url, let's provide a default fallback here just in case
+        tracing::error!("Failed to load configuration: {}. Falling back to default SQLite...", err);
+        config::Settings {
+            database: config::DatabaseSettings {
+                url: "sqlite://data.sqlite?mode=rwc".to_string()
+            }
+        }
+    });
+
+    let db_url = if settings.database.url.is_empty() {
+        "sqlite://data.sqlite?mode=rwc".to_string()
+    } else {
+        settings.database.url.clone()
+    };
+
     // Connect to Postgres, MySQL or SQLite using SeaORM
     let db = Database::connect(&db_url).await?;
 
