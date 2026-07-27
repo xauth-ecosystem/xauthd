@@ -327,7 +327,7 @@ async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>
                 
                 if let Ok(Some(user)) = repo.get_user_by_name(u).await {
                     let access_token = crate::jwt::generate_jwt(u, &state.settings.jwt.secret, state.settings.jwt.access_token_ttl).unwrap();
-                    let refresh_token = crate::jwt::generate_jwt(u, &state.settings.jwt.secret, 3600 * 24 * 7).unwrap();
+                    let refresh_token = crate::jwt::generate_jwt(u, &state.settings.jwt.secret, state.settings.jwt.refresh_token_ttl).unwrap();
                     let n = data["n"].as_str().unwrap_or_default();
                     let nonce_opt = if n.is_empty() { None } else { Some(n.to_string()) };
                     let id_token = crate::jwt::generate_rs256_jwt(u, &state.rsa_key, state.settings.jwt.access_token_ttl, nonce_opt).unwrap();
