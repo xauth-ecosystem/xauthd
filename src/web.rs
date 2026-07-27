@@ -230,14 +230,25 @@ async fn login_events_get(State(state): State<AppState>, Query(q): Query<SseQuer
     Sse::new(ReceiverStream::new(rx)).keep_alive(axum::response::sse::KeepAlive::new())
 }
 
-async fn consent_get(headers: axum::http::HeaderMap, Query(q): Query<LoginQuery>) -> impl IntoResponse {
+async fn consent_get(headers: axum::http::HeaderMap, State(state): State<AppState>, Query(q): Query<LoginQuery>) -> impl IntoResponse {
     let username = get_username_from_cookie(&headers);
+    let repo = UserRepository::new(state.db.clone());
+    let mut allowed_scopes = "profile".to_string();
+    
+    if let Some(client_id) = &q.client_id {
+        if let Ok(Some(client)) = repo.get_oauth_client(client_id).await {
+            if let Some(scopes) = client.allowed_scopes {
+                allowed_scopes = scopes;
+            }
+        }
+    }
+
     let template = ConsentTemplate {
         client_id: q.client_id.unwrap_or_default(),
         redirect_uri: q.redirect_uri.unwrap_or_default(),
         state: q.state.unwrap_or_default(),
         username,
-        scopes_list: "profile".to_string(),
+        scopes_list: allowed_scopes,
         code_challenge: q.code_challenge.unwrap_or_default(),
         code_challenge_method: q.code_challenge_method.unwrap_or_default(),
         nonce: q.nonce.unwrap_or_default(),
