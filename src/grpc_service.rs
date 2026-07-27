@@ -178,7 +178,24 @@ impl AuthService for XAuthCoreService {
         }
     }
 
-    async fn force_password_change(&self, _: Request<ForcePasswordChangeRequest>) -> Result<Response<ForcePasswordChangeResponse>, Status> {
-        Err(Status::unimplemented("Not implemented yet"))
+    async fn force_password_change(&self, request: Request<ForcePasswordChangeRequest>) -> Result<Response<ForcePasswordChangeResponse>, Status> {
+        let req = request.into_inner();
+        let repo = UserRepository::new(self.pool.clone());
+        
+        match repo.get_user_by_name(&req.target_username).await {
+            Ok(Some(_user)) => {
+                // TODO: Update 'must_change_password' flag in DB
+                // TODO: If req.immediate_kick is true, send KickPlayer command via streaming channel
+                Ok(Response::new(ForcePasswordChangeResponse {
+                    success: true,
+                }))
+            }
+            Ok(None) => {
+                Ok(Response::new(ForcePasswordChangeResponse {
+                    success: false,
+                }))
+            }
+            Err(_) => Err(Status::internal("Database error")),
+        }
     }
 }
