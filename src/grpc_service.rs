@@ -114,8 +114,17 @@ impl AuthService for XAuthCoreService {
         }
     }
 
-    async fn validate_session(&self, _: Request<SessionRequest>) -> Result<Response<SessionResponse>, Status> {
-        Err(Status::unimplemented("Not implemented yet"))
+    async fn validate_session(&self, request: Request<SessionRequest>) -> Result<Response<SessionResponse>, Status> {
+        let req = request.into_inner();
+        
+        // TODO: Decode JWT or fetch session from database once ready
+        let is_valid = !req.session_token.is_empty();
+        
+        Ok(Response::new(SessionResponse {
+            is_valid,
+            username: "Player".into(), // TODO: Extract from token
+            expires_at: 0,
+        }))
     }
     
     async fn end_session(&self, _: Request<EndSessionRequest>) -> Result<Response<EndSessionResponse>, Status> {
