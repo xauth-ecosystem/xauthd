@@ -7,19 +7,19 @@ use crate::xauth_v1::{
     auth_step_response::NextAction,
 };
 use crate::db::UserRepository;
-use sqlx::SqlitePool;
+use sea_orm::DatabaseConnection;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 use tracing::info;
 
 pub struct XAuthCoreService {
-    pool: SqlitePool,
+    db: DatabaseConnection,
 }
 
 impl XAuthCoreService {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+    pub fn new(db: DatabaseConnection) -> Self {
+        Self { db }
     }
 }
 
@@ -48,7 +48,7 @@ impl AuthService for XAuthCoreService {
         request: Request<AuthStepRequest>,
     ) -> Result<Response<AuthStepResponse>, Status> {
         let req = request.into_inner();
-        let repo = UserRepository::new(self.pool.clone());
+        let repo = UserRepository::new(self.db.clone());
 
         match req.r#type {
             0 => {
@@ -65,7 +65,10 @@ impl AuthService for XAuthCoreService {
                     Err(_) => return Err(Status::internal("Database error")),
                 };
 
-                if crate::hash::verify_password(&req.input_data, &user.password_hash) {
+                // Assume password hash verification would use a field on User struct (we will define this in sea-orm Entity)
+                let hash_to_verify = &user.password_hash; // This depends on the exact field name in the Entity we will create
+
+                if crate::hash::verify_password(&req.input_data, hash_to_verify) {
                     let has_2fa = repo.is_2fa_enabled(user.id).await.unwrap_or(false);
                     
                     if has_2fa {
@@ -173,7 +176,7 @@ impl AuthService for XAuthCoreService {
 
     async fn get_player_info(&self, request: Request<PlayerInfoRequest>) -> Result<Response<PlayerInfoResponse>, Status> {
         let req = request.into_inner();
-        let repo = UserRepository::new(self.pool.clone());
+        let repo = UserRepository::new(self.db.clone());
         
         match repo.get_user_by_name(&req.target_username).await {
             Ok(Some(user)) => {
@@ -182,7 +185,7 @@ impl AuthService for XAuthCoreService {
                 // TODO: Fetch real last_ip, last_login, is_banned, failed_attempts from DB
                 Ok(Response::new(PlayerInfoResponse {
                     exists: true,
-                    username: user.username,
+                    username: user.username.clone(),
                     is_banned: false, 
                     has_2fa,
                     last_ip: "127.0.0.1".into(), 
@@ -207,7 +210,7 @@ impl AuthService for XAuthCoreService {
 
     async fn force_password_change(&self, request: Request<ForcePasswordChangeRequest>) -> Result<Response<ForcePasswordChangeResponse>, Status> {
         let req = request.into_inner();
-        let repo = UserRepository::new(self.pool.clone());
+        let repo = UserRepository::new(self.db.clone());
         
         match repo.get_user_by_name(&req.target_username).await {
             Ok(Some(_user)) => {
