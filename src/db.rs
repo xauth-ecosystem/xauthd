@@ -52,6 +52,7 @@ pub mod oauth_clients {
         pub client_id: String,
         pub client_secret: String,
         pub redirect_uris: String,
+        pub allowed_scopes: Option<String>,
     }
 
     #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -154,5 +155,12 @@ impl UserRepository {
         } else {
             Ok(false)
         }
+    }
+
+    pub async fn get_oauth_client(&self, client_id: &str) -> Result<Option<oauth_clients::Model>, DbErr> {
+        oauth_clients::Entity::find()
+            .filter(oauth_clients::Column::ClientId.eq(client_id))
+            .one(&self.db)
+            .await
     }
 }
