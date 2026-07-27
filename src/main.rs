@@ -10,6 +10,7 @@ mod grpc_service;
 mod hash;
 mod jwt;
 mod migrator;
+mod web;
 
 pub mod xauth_v1 {
     tonic::include_proto!("xauth.v1");
@@ -36,16 +37,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Migrator::up(&db, None).await?;
     info!("Migrations applied successfully.");
 
-    let auth_service = XAuthCoreService::new(db);
+    let core_service = XAuthCoreService::new(db);
 
     let addr: SocketAddr = "0.0.0.0:50051".parse()?;
     
-    info!("gRPC server listening on {}", addr);
+    info!("XAuth Core gRPC listening on {}", addr);
 
-    Server::builder()
-        .add_service(AuthServiceServer::new(auth_service))
-        .serve(addr)
-        .await?;
+    let grpc_server = Server::builder()
+        .add_service(AuthServiceServer::new(core_service))
+        .serve(addr);
+        
+    let web_app = crate::web::router();
+    let web_listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
+    info!("XAuth Web Dashboard listening on 0.0.0.0:8080");
+    
+    let web_server = axum::serve(web_listener, web_app);
+    
+    let (grpc_res, web_res) = tokio::join!(grpc_server, web_server);
+    grpc_res?;
+    web_res.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
     Ok(())
 }
