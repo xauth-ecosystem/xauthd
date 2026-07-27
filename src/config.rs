@@ -47,6 +47,7 @@ pub struct JwtSettings {
     pub rsa_private_key_path: String,
     pub session_ttl: usize,
     pub auth_code_ttl: usize,
+    pub access_token_ttl: usize,
 }
 
 #[derive(Debug, Deserialize, Clone)]
