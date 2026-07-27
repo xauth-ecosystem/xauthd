@@ -100,32 +100,57 @@ async fn login_post(State(state): State<AppState>, Form(f): Form<LoginForm>) -> 
     let request_id = Uuid::new_v4().to_string();
     state.login_channels.write().await.insert(request_id.clone(), rx);
     
-    tokio::spawn(async move {
-        let result = match repo.get_user_by_name(&f.username).await {
-            Ok(Some(user)) => {
-                if crate::hash::verify_password(&f.password, &user.password_hash) {
-                    let mut url = format!("/consent?client_id={}", f.client_id.unwrap_or_default());
-                    if let Some(redirect_uri) = f.redirect_uri {
-                        url.push_str(&format!("&redirect_uri={}", redirect_uri));
+    let mut headers = axum::http::HeaderMap::new();
+    
+    let result_data = match repo.get_user_by_name(&f.username).await {
+        Ok(Some(user)) => {
+            if crate::hash::verify_password(&f.password, &user.password_hash) {
+                if let Ok(session_token) = crate::jwt::generate_jwt(&user.username, "super_secret_key_change_me", 3600) {
+                    if let Ok(cookie_val) = format!("session_token={}; HttpOnly; Path=/; SameSite=Lax", session_token).parse() {
+                        headers.insert(axum::http::header::SET_COOKIE, cookie_val);
                     }
-                    if let Some(s) = f.state {
-                        url.push_str(&format!("&state={}", s));
-                    }
-                    serde_json::to_string(&LoginEventData { redirect_url: Some(url) }).unwrap()
-                } else {
-                    serde_json::to_string(&LoginEventData { redirect_url: None }).unwrap()
                 }
-            },
-            _ => serde_json::to_string(&LoginEventData { redirect_url: None }).unwrap(),
-        };
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        let _ = tx.send(result).await;
+                let mut url = format!("/consent?client_id={}", f.client_id.unwrap_or_default());
+                if let Some(redirect_uri) = f.redirect_uri {
+                    url.push_str(&format!("&redirect_uri={}", redirect_uri));
+                }
+                if let Some(s) = f.state {
+                    url.push_str(&format!("&state={}", s));
+                }
+                serde_json::to_string(&LoginEventData { redirect_url: Some(url) }).unwrap()
+            } else {
+                serde_json::to_string(&LoginEventData { redirect_url: None }).unwrap()
+            }
+        },
+        _ => serde_json::to_string(&LoginEventData { redirect_url: None }).unwrap(),
+    };
+    
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let _ = tx.send(result_data).await;
     });
     
-    Json(LoginResponse {
+    (headers, Json(LoginResponse {
         request_id: Some(request_id),
         error: None,
-    })
+    }))
+}
+
+fn get_username_from_cookie(headers: &axum::http::HeaderMap) -> String {
+    if let Some(cookie_val) = headers.get(axum::http::header::COOKIE) {
+        if let Ok(cookie_str) = cookie_val.to_str() {
+            for part in cookie_str.split(';') {
+                let part = part.trim();
+                if part.starts_with("session_token=") {
+                    let token = &part["session_token=".len()..];
+                    if let Ok(claims) = crate::jwt::validate_jwt(token, "super_secret_key_change_me") {
+                        return claims.sub;
+                    }
+                }
+            }
+        }
+    }
+    "Guest".to_string()
 }
 
 async fn login_events_get(State(state): State<AppState>, Query(q): Query<SseQuery>) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
@@ -143,12 +168,13 @@ async fn login_events_get(State(state): State<AppState>, Query(q): Query<SseQuer
     Sse::new(ReceiverStream::new(rx)).keep_alive(axum::response::sse::KeepAlive::new())
 }
 
-async fn consent_get(Query(q): Query<LoginQuery>) -> impl IntoResponse {
+async fn consent_get(headers: axum::http::HeaderMap, Query(q): Query<LoginQuery>) -> impl IntoResponse {
+    let username = get_username_from_cookie(&headers);
     let template = ConsentTemplate {
         client_id: q.client_id.unwrap_or_default(),
         redirect_uri: q.redirect_uri.unwrap_or_default(),
         state: q.state.unwrap_or_default(),
-        username: "Player".to_string(), // Mock
+        username,
         scopes_list: "profile".to_string(),
     };
     Html(template.render().unwrap())
