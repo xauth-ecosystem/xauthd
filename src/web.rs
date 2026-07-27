@@ -201,7 +201,11 @@ async fn consent_get(headers: axum::http::HeaderMap, Query(q): Query<LoginQuery>
 async fn consent_post(headers: axum::http::HeaderMap, Form(f): Form<ConsentForm>) -> impl IntoResponse {
     if f.action == "approve" {
         let username = get_username_from_cookie(&headers);
-        let subject = format!("{}:{}", username, f.client_id);
+        let subject = serde_json::to_string(&serde_json::json!({
+            "u": username,
+            "c": f.client_id,
+            "r": f.redirect_uri
+        })).unwrap_or_default();
         let code = crate::jwt::generate_jwt(&subject, "super_secret_key_change_me", 600).unwrap_or_else(|_| "fallback_code".into());
         let url = format!("{}?code={}&state={}", f.redirect_uri, code, f.state);
         axum::response::Redirect::to(&url).into_response()
@@ -212,7 +216,6 @@ async fn consent_post(headers: axum::http::HeaderMap, Form(f): Form<ConsentForm>
 }
 
 async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>) -> impl IntoResponse {
-    tracing::info!("Token request for client '{}' with redirect_uri '{:?}'", req.client_id, req.redirect_uri);
     let repo = UserRepository::new(state.db.clone());
     let is_valid = repo.validate_oauth_client(&req.client_id, &req.client_secret).await.unwrap_or(false);
     
@@ -226,20 +229,25 @@ async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>
     
     let code = req.code.unwrap_or_default();
     if let Ok(claims) = crate::jwt::validate_jwt(&code, "super_secret_key_change_me") {
-        let parts: Vec<&str> = claims.sub.split(':').collect();
-        if parts.len() == 2 && parts[1] == req.client_id {
-            let username = parts[0];
-            let access_token = crate::jwt::generate_jwt(username, "super_secret_key_change_me", 3600).unwrap();
-            let refresh_token = crate::jwt::generate_jwt(username, "super_secret_key_change_me", 3600 * 24 * 7).unwrap();
-            let id_token = crate::jwt::generate_jwt(username, "super_secret_key_change_me", 3600).unwrap();
+        if let Ok(data) = serde_json::from_str::<serde_json::Value>(&claims.sub) {
+            let u = data["u"].as_str().unwrap_or_default();
+            let c = data["c"].as_str().unwrap_or_default();
+            let r = data["r"].as_str().unwrap_or_default();
             
-            return Json(TokenResponse {
-                access_token,
-                token_type: "Bearer".to_string(),
-                expires_in: 3600,
-                refresh_token,
-                id_token,
-            }).into_response();
+            let req_redirect_uri = req.redirect_uri.unwrap_or_default();
+            if c == req.client_id && r == req_redirect_uri {
+                let access_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600).unwrap();
+                let refresh_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600 * 24 * 7).unwrap();
+                let id_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600).unwrap();
+                
+                return Json(TokenResponse {
+                    access_token,
+                    token_type: "Bearer".to_string(),
+                    expires_in: 3600,
+                    refresh_token,
+                    id_token,
+                }).into_response();
+            }
         }
     }
     
