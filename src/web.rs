@@ -316,7 +316,9 @@ async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>
                 
                 let access_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600).unwrap();
                 let refresh_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600 * 24 * 7).unwrap();
-                let id_token = crate::jwt::generate_rs256_jwt(u, &state.rsa_key, 3600).unwrap();
+                let n = data["n"].as_str().unwrap_or_default();
+                let nonce_opt = if n.is_empty() { None } else { Some(n.to_string()) };
+                let id_token = crate::jwt::generate_rs256_jwt(u, &state.rsa_key, 3600, nonce_opt).unwrap();
                 
                 return Json(TokenResponse {
                     access_token,
