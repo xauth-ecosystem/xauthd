@@ -113,6 +113,7 @@ struct TokenResponse {
 struct AppStateInner {
     db: DatabaseConnection,
     login_channels: RwLock<HashMap<String, mpsc::Receiver<String>>>,
+    rsa_key: rsa::RsaPrivateKey,
 }
 
 type AppState = Arc<AppStateInner>;
@@ -300,7 +301,7 @@ async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>
                 
                 let access_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600).unwrap();
                 let refresh_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600 * 24 * 7).unwrap();
-                let id_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600).unwrap();
+                let id_token = crate::jwt::generate_rs256_jwt(u, &state.rsa_key, 3600).unwrap();
                 
                 return Json(TokenResponse {
                     access_token,
@@ -314,6 +315,10 @@ async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>
     }
     
     (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "invalid_grant"}))).into_response()
+}
+
+async fn jwks_get(State(state): State<AppState>) -> impl IntoResponse {
+    Json(crate::jwt::get_jwks(&state.rsa_key))
 }
 
 async fn discovery_get() -> impl IntoResponse {
@@ -331,13 +336,16 @@ async fn discovery_get() -> impl IntoResponse {
 }
 
 pub fn router(db: DatabaseConnection) -> Router {
+    let rsa_key = crate::jwt::get_or_create_rsa_key();
     let state = Arc::new(AppStateInner {
         db,
         login_channels: RwLock::new(HashMap::new()),
+        rsa_key,
     });
 
     Router::new()
         .route("/.well-known/openid-configuration", get(discovery_get))
+        .route("/jwks", get(jwks_get))
         .route("/authorize", get(authorize_get))
         .route("/login", post(login_post))
         .route("/login-events", get(login_events_get))
