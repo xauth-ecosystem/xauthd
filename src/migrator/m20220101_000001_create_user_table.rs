@@ -22,6 +22,8 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Users::PasswordHash).string().not_null())
                     .col(ColumnDef::new(Users::LastIp).string())
                     .col(ColumnDef::new(Users::FailedAttempts).integer().not_null().default(0))
+                    .col(ColumnDef::new(Users::IsBanned).boolean().not_null().default(false))
+                    .col(ColumnDef::new(Users::MustChangePassword).boolean().not_null().default(false))
                     .to_owned(),
             )
             .await
@@ -42,4 +44,6 @@ enum Users {
     PasswordHash,
     LastIp,
     FailedAttempts,
+    IsBanned,
+    MustChangePassword,
 }
