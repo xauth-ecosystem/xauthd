@@ -37,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Migrator::up(&db, None).await?;
     info!("Migrations applied successfully.");
 
-    let core_service = XAuthCoreService::new(db);
+    let core_service = XAuthCoreService::new(db.clone());
 
     let addr: SocketAddr = "0.0.0.0:50051".parse()?;
     
