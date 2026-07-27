@@ -61,6 +61,43 @@ pub mod oauth_clients {
     impl ActiveModelBehavior for ActiveModel {}
 }
 
+pub mod sessions {
+    use sea_orm::entity::prelude::*;
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "sessions")]
+    pub struct Model {
+        #[sea_orm(primary_key)]
+        pub id: i64,
+        pub user_id: i64,
+        #[sea_orm(unique)]
+        pub session_token: String,
+        pub ip_address: String,
+        pub created_at: i64,
+        pub expires_at: i64,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {
+        #[sea_orm(
+            belongs_to = "crate::db::Entity",
+            from = "Column::UserId",
+            to = "crate::db::Column::Id",
+            on_update = "NoAction",
+            on_delete = "Cascade"
+        )]
+        User,
+    }
+
+    impl Related<crate::db::Entity> for Entity {
+        fn to() -> RelationDef {
+            Relation::User.def()
+        }
+    }
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
 pub struct UserRepository {
     db: DatabaseConnection,
 }
@@ -162,5 +199,33 @@ impl UserRepository {
             .filter(oauth_clients::Column::ClientId.eq(client_id))
             .one(&self.db)
             .await
+    }
+
+    pub async fn create_session(&self, user_id: i64, token: &str, ip: &str, expires_in_sec: i64) -> Result<(), DbErr> {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+        let new_session = sessions::ActiveModel {
+            user_id: Set(user_id),
+            session_token: Set(token.to_owned()),
+            ip_address: Set(ip.to_owned()),
+            created_at: Set(now),
+            expires_at: Set(now + expires_in_sec),
+            ..Default::default()
+        };
+        new_session.insert(&self.db).await?;
+        Ok(())
+    }
+
+    pub async fn get_session(&self, token: &str) -> Result<Option<sessions::Model>, DbErr> {
+        sessions::Entity::find()
+            .filter(sessions::Column::SessionToken.eq(token))
+            .one(&self.db)
+            .await
+    }
+
+    pub async fn delete_session(&self, token: &str) -> Result<(), DbErr> {
+        if let Some(session) = self.get_session(token).await? {
+            sessions::Entity::delete_by_id(session.id).exec(&self.db).await?;
+        }
+        Ok(())
     }
 }
