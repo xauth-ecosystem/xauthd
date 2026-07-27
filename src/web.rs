@@ -316,6 +316,20 @@ async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>
     (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "invalid_grant"}))).into_response()
 }
 
+async fn discovery_get() -> impl IntoResponse {
+    let base_url = "http://localhost:8080";
+    Json(serde_json::json!({
+        "issuer": base_url,
+        "authorization_endpoint": format!("{}/authorize", base_url),
+        "token_endpoint": format!("{}/token", base_url),
+        "jwks_uri": format!("{}/jwks", base_url),
+        "scopes_supported": ["openid", "profile"],
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code"],
+        "id_token_signing_alg_values_supported": ["RS256"]
+    }))
+}
+
 pub fn router(db: DatabaseConnection) -> Router {
     let state = Arc::new(AppStateInner {
         db,
@@ -323,6 +337,7 @@ pub fn router(db: DatabaseConnection) -> Router {
     });
 
     Router::new()
+        .route("/.well-known/openid-configuration", get(discovery_get))
         .route("/authorize", get(authorize_get))
         .route("/login", post(login_post))
         .route("/login-events", get(login_events_get))
