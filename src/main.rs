@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Migrator::up(&db, None).await?;
     info!("Migrations applied successfully.");
 
-    let core_service = XAuthCoreService::new(db.clone());
+    let core_service = XAuthCoreService::new(db.clone(), std::sync::Arc::new(settings.clone()));
 
     let addr: SocketAddr = settings.network.grpc_address.parse()?;
     
