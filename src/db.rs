@@ -11,6 +11,8 @@ pub struct Model {
     pub password_hash: String,
     pub last_ip: Option<String>,
     pub failed_attempts: i32,
+    pub is_banned: bool,
+    pub must_change_password: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -43,6 +45,8 @@ impl UserRepository {
             username: Set(username.to_owned()),
             password_hash: Set(hash.to_owned()),
             failed_attempts: Set(0),
+            is_banned: Set(false),
+            must_change_password: Set(false),
             ..Default::default()
         };
         new_user.insert(&self.db).await?;
@@ -65,6 +69,16 @@ impl UserRepository {
             active.failed_attempts = Set(active.failed_attempts.clone().unwrap() + 1);
             active.update(&self.db).await?;
         }
+        Ok(())
+    }
+
+    pub async fn set_must_change_password(&self, user_id: i64, val: bool) -> Result<(), DbErr> {
+        let update = ActiveModel {
+            id: Set(user_id),
+            must_change_password: Set(val),
+            ..Default::default()
+        };
+        update.update(&self.db).await?;
         Ok(())
     }
 }
