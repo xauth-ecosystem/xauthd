@@ -48,7 +48,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add_service(AuthServiceServer::new(core_service))
         .serve(addr);
         
-    let web_app = crate::web::router(db.clone());
+    let web_app = crate::web::router(db.clone(), std::sync::Arc::new(settings.clone()));
     let web_listener = tokio::net::TcpListener::bind(&settings.network.web_address).await?;
     info!("XAuth Web Dashboard listening on {}", settings.network.web_address);
     
