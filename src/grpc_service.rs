@@ -204,17 +204,17 @@ impl AuthService for XAuthCoreService {
                 
                 if c == req.client_id && r == req.redirect_uri {
                     if let Ok(Some(user)) = repo.get_user_by_name(u).await {
-                        let access_token = crate::jwt::generate_jwt(u, &self.settings.jwt.secret, 3600).unwrap_or_default();
+                        let access_token = crate::jwt::generate_jwt(u, &self.settings.jwt.secret, self.settings.jwt.access_token_ttl).unwrap_or_default();
                         let refresh_token = crate::jwt::generate_jwt(u, &self.settings.jwt.secret, 3600 * 24 * 7).unwrap_or_default();
                         let scopes = "openid profile";
 
-                        repo.create_oauth_token(&req.client_id, user.id, &access_token, Some(&refresh_token), 3600, scopes).await.ok();
+                        repo.create_oauth_token(&req.client_id, user.id, &access_token, Some(&refresh_token), self.settings.jwt.access_token_ttl as i64, scopes).await.ok();
 
                         return Ok(Response::new(OAuthTokenResponse {
                             success: true,
                             access_token,
                             refresh_token,
-                            expires_in: 3600,
+                            expires_in: self.settings.jwt.access_token_ttl as i32,
                             error: "".into(),
                         }));
                     }
