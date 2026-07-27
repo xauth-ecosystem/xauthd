@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Дозволи | XAuth eHealth Portal</title>
+    <!-- Semantic UI CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.5.0/semantic.min.css">
+    <style>
+        body {
+            background-color: #f4f7f6;
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .consent-container {
+            width: 100%;
+            max-width: 500px;
+        }
+        .ui.segment.portal-card {
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            padding: 30px;
+            border: none;
+            border-top: 5px solid #21ba45; /* eHealth green for consent */
+        }
+        .portal-header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+        .portal-header .icon {
+            font-size: 3em;
+            color: #21ba45;
+            margin-bottom: 10px;
+        }
+        .portal-header h2 {
+            margin: 0;
+            color: #333;
+            font-weight: 600;
+        }
+        .portal-header p {
+            color: #777;
+            margin-top: 5px;
+        }
+        .scope-list {
+            margin-bottom: 25px;
+        }
+        .ui.button.approve {
+            background-color: #21ba45;
+            color: white;
+            border-radius: 8px;
+        }
+        .ui.button.approve:hover {
+            background-color: #16ab39;
+        }
+        .ui.button.deny {
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="consent-container">
+        <div class="ui segment portal-card">
+            <div class="portal-header">
+                <i class="check circle outline icon"></i>
+                <h2>Запит на доступ</h2>
+                <p>Додаток <strong>{{ client_id }}</strong> запитує доступ до вашого акаунту.</p>
+            </div>
+            
+            <div class="ui message info">
+                Цей додаток отримає доступ до наступної інформації:
+            </div>
+            
+            <div class="ui relaxed divided list scope-list">
+                <div class="item">
+                    <i class="large user middle aligned icon"></i>
+                    <div class="content">
+                        <a class="header">Профіль користувача</a>
+                        <div class="description">Ваш нікнейм, статус та базова інформація.</div>
+                    </div>
+                </div>
+                <!-- Extend with actual scopes from parameter if needed -->
+            </div>
+
+            <form class="ui form" method="POST" action="/consent">
+                <input type="hidden" name="client_id" value="{{ client_id }}">
+                <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
+                <input type="hidden" name="state" value="{{ state }}">
+                
+                <div class="ui two buttons">
+                    <button class="ui deny button" type="submit" name="action" value="deny">Відхилити</button>
+                    <button class="ui approve button" type="submit" name="action" value="approve">Дозволити</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
