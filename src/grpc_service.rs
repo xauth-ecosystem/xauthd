@@ -187,15 +187,15 @@ impl AuthService for XAuthCoreService {
             Ok(Some(user)) => {
                 let has_2fa = repo.is_2fa_enabled(user.id).await.unwrap_or(false);
                 
-                // TODO: Fetch real last_ip, last_login, is_banned, failed_attempts from DB
+                // TODO: Fetch real last_login from DB
                 Ok(Response::new(PlayerInfoResponse {
                     exists: true,
                     username: user.username.clone(),
-                    is_banned: false, 
+                    is_banned: user.is_banned, 
                     has_2fa,
-                    last_ip: "127.0.0.1".into(), 
+                    last_ip: user.last_ip.unwrap_or_default(), 
                     last_login: 0, 
-                    failed_attempts: 0, 
+                    failed_attempts: user.failed_attempts, 
                 }))
             }
             Ok(None) => {
@@ -218,8 +218,8 @@ impl AuthService for XAuthCoreService {
         let repo = UserRepository::new(self.db.clone());
         
         match repo.get_user_by_name(&req.target_username).await {
-            Ok(Some(_user)) => {
-                // TODO: Update 'must_change_password' flag in DB
+            Ok(Some(user)) => {
+                repo.set_must_change_password(user.id, true).await.ok();
                 // TODO: If req.immediate_kick is true, send KickPlayer command via streaming channel
                 Ok(Response::new(ForcePasswordChangeResponse {
                     success: true,
