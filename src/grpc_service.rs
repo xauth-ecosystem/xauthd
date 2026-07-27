@@ -130,8 +130,38 @@ impl AuthService for XAuthCoreService {
         Err(Status::unimplemented("Not implemented yet"))
     }
 
-    async fn get_player_info(&self, _: Request<PlayerInfoRequest>) -> Result<Response<PlayerInfoResponse>, Status> {
-        Err(Status::unimplemented("Not implemented yet"))
+    async fn get_player_info(&self, request: Request<PlayerInfoRequest>) -> Result<Response<PlayerInfoResponse>, Status> {
+        let req = request.into_inner();
+        let repo = UserRepository::new(self.pool.clone());
+        
+        match repo.get_user_by_name(&req.target_username).await {
+            Ok(Some(user)) => {
+                let has_2fa = repo.is_2fa_enabled(user.id).await.unwrap_or(false);
+                
+                // TODO: Fetch real last_ip, last_login, is_banned, failed_attempts from DB
+                Ok(Response::new(PlayerInfoResponse {
+                    exists: true,
+                    username: user.username,
+                    is_banned: false, 
+                    has_2fa,
+                    last_ip: "127.0.0.1".into(), 
+                    last_login: 0, 
+                    failed_attempts: 0, 
+                }))
+            }
+            Ok(None) => {
+                Ok(Response::new(PlayerInfoResponse {
+                    exists: false,
+                    username: req.target_username,
+                    is_banned: false,
+                    has_2fa: false,
+                    last_ip: "".into(),
+                    last_login: 0,
+                    failed_attempts: 0,
+                }))
+            }
+            Err(_) => Err(Status::internal("Database error")),
+        }
     }
 
     async fn force_password_change(&self, _: Request<ForcePasswordChangeRequest>) -> Result<Response<ForcePasswordChangeResponse>, Status> {
