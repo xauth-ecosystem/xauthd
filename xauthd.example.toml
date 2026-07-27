@@ -31,3 +31,10 @@ memory_cost = 65536
 time_cost = 4
 # Number of threads that Argon2 will use. Default: 1.
 threads = 1
+
+[jwt]
+# Secret used for symmetric JWT tokens (like internal sessions)
+secret = "super_secret_key_change_me_to_something_random"
+# Path to the RSA private key used for OIDC/JWKS asymmetric signing
+# If the file does not exist, the daemon will automatically generate it at this location.
+rsa_private_key_path = "private_key.pem"
