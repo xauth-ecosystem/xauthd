@@ -14,8 +14,8 @@ pub struct Claims {
     pub nonce: Option<String>,
 }
 
-pub fn get_or_create_rsa_key() -> RsaPrivateKey {
-    if let Ok(pem) = fs::read_to_string("private_key.pem") {
+pub fn get_or_create_rsa_key(path: &str) -> RsaPrivateKey {
+    if let Ok(pem) = fs::read_to_string(path) {
         if let Ok(key) = RsaPrivateKey::from_pkcs8_pem(&pem) {
             return key;
         }
@@ -24,7 +24,7 @@ pub fn get_or_create_rsa_key() -> RsaPrivateKey {
     let mut rng = rand_core::OsRng;
     let priv_key = RsaPrivateKey::new(&mut rng, 2048).expect("failed to generate a key");
     let pem = priv_key.to_pkcs8_pem(rsa::pkcs8::LineEnding::LF).expect("failed to encode key").to_string();
-    fs::write("private_key.pem", pem).expect("failed to write key");
+    fs::write(path, pem).expect("failed to write key");
     priv_key
 }
 
