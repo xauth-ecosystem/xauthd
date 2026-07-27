@@ -267,7 +267,7 @@ async fn consent_post(headers: axum::http::HeaderMap, State(state): State<AppSta
             "ccm": f.code_challenge_method,
             "n": f.nonce
         })).unwrap_or_default();
-        let code = crate::jwt::generate_jwt(&subject, &state.settings.jwt.secret, 600).unwrap_or_else(|_| "fallback_code".into());
+        let code = crate::jwt::generate_jwt(&subject, &state.settings.jwt.secret, state.settings.jwt.auth_code_ttl).unwrap_or_else(|_| "fallback_code".into());
         let url = format!("{}?code={}&state={}", f.redirect_uri, code, f.state);
         axum::response::Redirect::to(&url).into_response()
     } else {
