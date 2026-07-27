@@ -40,6 +40,9 @@
                         <input type="hidden" name="client_id" value="{{ client_id }}">
                         <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
                         <input type="hidden" name="state" value="{{ state }}">
+                        <input type="hidden" name="code_challenge" value="{{ code_challenge }}">
+                        <input type="hidden" name="code_challenge_method" value="{{ code_challenge_method }}">
+                        <input type="hidden" name="nonce" value="{{ nonce }}">
                         <div class="two ui buttons">
                             <button type="submit" name="consent_action" value="deny" class="ui negative button">Deny</button>
                             <button type="submit" name="consent_action" value="approve" class="ui positive button">Approve</button>
