@@ -101,8 +101,8 @@ impl AuthService for XAuthCoreService {
                             session_token: "".into(),
                         }))
                     } else {
-                        let token = crate::jwt::generate_jwt(&user.username, &self.settings.jwt.secret, 3600 * 24).unwrap_or_else(|_| "".into());
-                        repo.create_session(user.id, &token, &req.ip_address, 3600 * 24).await.ok();
+                        let token = crate::jwt::generate_jwt(&user.username, &self.settings.jwt.secret, self.settings.jwt.session_ttl).unwrap_or_else(|_| "".into());
+                        repo.create_session(user.id, &token, &req.ip_address, self.settings.jwt.session_ttl as i64).await.ok();
                         repo.update_last_login(user.id, &req.ip_address).await.ok();
                         
                         Ok(Response::new(AuthStepResponse {
@@ -129,9 +129,9 @@ impl AuthService for XAuthCoreService {
                 repo.create_user(&req.username, &hash).await
                     .map_err(|_| Status::already_exists("User exists"))?;
 
-                let token = crate::jwt::generate_jwt(&req.username, &self.settings.jwt.secret, 3600 * 24).unwrap_or_else(|_| "".into());
+                let token = crate::jwt::generate_jwt(&req.username, &self.settings.jwt.secret, self.settings.jwt.session_ttl).unwrap_or_else(|_| "".into());
                 if let Ok(Some(u)) = repo.get_user_by_name(&req.username).await {
-                    repo.create_session(u.id, &token, &req.ip_address, 3600 * 24).await.ok();
+                    repo.create_session(u.id, &token, &req.ip_address, self.settings.jwt.session_ttl as i64).await.ok();
                 }
 
                 Ok(Response::new(AuthStepResponse {
