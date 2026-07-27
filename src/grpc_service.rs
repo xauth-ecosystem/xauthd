@@ -187,14 +187,13 @@ impl AuthService for XAuthCoreService {
             Ok(Some(user)) => {
                 let has_2fa = repo.is_2fa_enabled(user.id).await.unwrap_or(false);
                 
-                // TODO: Fetch real last_login from DB
                 Ok(Response::new(PlayerInfoResponse {
                     exists: true,
                     username: user.username.clone(),
                     is_banned: user.is_banned, 
                     has_2fa,
                     last_ip: user.last_ip.unwrap_or_default(), 
-                    last_login: 0, 
+                    last_login: user.last_login.unwrap_or(0), 
                     failed_attempts: user.failed_attempts, 
                 }))
             }
