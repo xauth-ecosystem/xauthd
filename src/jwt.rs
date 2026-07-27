@@ -10,6 +10,8 @@ pub struct Claims {
     pub jti: String,
     pub exp: usize,
     pub iat: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nonce: Option<String>,
 }
 
 pub fn get_or_create_rsa_key() -> RsaPrivateKey {
@@ -59,6 +61,7 @@ pub fn generate_jwt(username: &str, secret: &str, expiration_seconds: usize) -> 
         jti,
         iat: now,
         exp: now + expiration_seconds,
+        nonce: None,
     };
     
     // We still keep the HS256 function for compatibility with other endpoints (like auth code).
@@ -66,7 +69,7 @@ pub fn generate_jwt(username: &str, secret: &str, expiration_seconds: usize) -> 
     encode(&header, &claims, &EncodingKey::from_secret(secret.as_ref()))
 }
 
-pub fn generate_rs256_jwt(username: &str, priv_key: &RsaPrivateKey, expiration_seconds: usize) -> Result<String, Error> {
+pub fn generate_rs256_jwt(username: &str, priv_key: &RsaPrivateKey, expiration_seconds: usize, nonce: Option<String>) -> Result<String, Error> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards")
@@ -78,6 +81,7 @@ pub fn generate_rs256_jwt(username: &str, priv_key: &RsaPrivateKey, expiration_s
         jti,
         iat: now,
         exp: now + expiration_seconds,
+        nonce,
     };
     
     let mut header = Header::new(Algorithm::RS256);
