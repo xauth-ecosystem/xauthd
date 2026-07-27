@@ -106,6 +106,11 @@ struct IntrospectRequest {
     token: String,
 }
 
+#[derive(Deserialize)]
+struct RevokeRequest {
+    token: String,
+}
+
 #[derive(Serialize)]
 struct TokenResponse {
     access_token: String,
@@ -353,6 +358,10 @@ async fn introspect_post(Form(req): Form<IntrospectRequest>) -> impl IntoRespons
     (axum::http::StatusCode::OK, Json(serde_json::json!({"active": false}))).into_response()
 }
 
+async fn revoke_post(Form(_req): Form<RevokeRequest>) -> impl IntoResponse {
+    axum::http::StatusCode::OK
+}
+
 async fn jwks_get(State(state): State<AppState>) -> impl IntoResponse {
     Json(crate::jwt::get_jwks(&state.rsa_key))
 }
@@ -384,6 +393,7 @@ pub fn router(db: DatabaseConnection) -> Router {
         .route("/jwks", get(jwks_get))
         .route("/user", get(user_get).post(user_get))
         .route("/introspect", post(introspect_post))
+        .route("/revoke", post(revoke_post))
         .route("/authorize", get(authorize_get))
         .route("/login", post(login_post))
         .route("/login-events", get(login_events_get))
