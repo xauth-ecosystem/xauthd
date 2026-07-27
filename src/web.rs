@@ -76,6 +76,24 @@ struct SseQuery {
     request_id: String,
 }
 
+#[derive(Deserialize)]
+struct TokenRequest {
+    grant_type: String,
+    code: Option<String>,
+    redirect_uri: Option<String>,
+    client_id: String,
+    client_secret: String,
+}
+
+#[derive(Serialize)]
+struct TokenResponse {
+    access_token: String,
+    token_type: String,
+    expires_in: usize,
+    refresh_token: String,
+    id_token: String,
+}
+
 struct AppStateInner {
     db: DatabaseConnection,
     login_channels: RwLock<HashMap<String, mpsc::Receiver<String>>>,
@@ -180,15 +198,51 @@ async fn consent_get(headers: axum::http::HeaderMap, Query(q): Query<LoginQuery>
     Html(template.render().unwrap())
 }
 
-async fn consent_post(Form(f): Form<ConsentForm>) -> impl IntoResponse {
+async fn consent_post(headers: axum::http::HeaderMap, Form(f): Form<ConsentForm>) -> impl IntoResponse {
     if f.action == "approve" {
-        let code = crate::jwt::generate_jwt(&f.client_id, "super_secret_key_change_me", 600).unwrap_or_else(|_| "fallback_code".into());
+        let username = get_username_from_cookie(&headers);
+        let subject = format!("{}:{}", username, f.client_id);
+        let code = crate::jwt::generate_jwt(&subject, "super_secret_key_change_me", 600).unwrap_or_else(|_| "fallback_code".into());
         let url = format!("{}?code={}&state={}", f.redirect_uri, code, f.state);
         axum::response::Redirect::to(&url).into_response()
     } else {
         let url = format!("{}?error=access_denied&state={}", f.redirect_uri, f.state);
         axum::response::Redirect::to(&url).into_response()
     }
+}
+
+async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>) -> impl IntoResponse {
+    let repo = UserRepository::new(state.db.clone());
+    let is_valid = repo.validate_oauth_client(&req.client_id, &req.client_secret).await.unwrap_or(false);
+    
+    if !is_valid {
+        return (axum::http::StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "invalid_client"}))).into_response();
+    }
+    
+    if req.grant_type != "authorization_code" {
+        return (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "unsupported_grant_type"}))).into_response();
+    }
+    
+    let code = req.code.unwrap_or_default();
+    if let Ok(claims) = crate::jwt::validate_jwt(&code, "super_secret_key_change_me") {
+        let parts: Vec<&str> = claims.sub.split(':').collect();
+        if parts.len() == 2 && parts[1] == req.client_id {
+            let username = parts[0];
+            let access_token = crate::jwt::generate_jwt(username, "super_secret_key_change_me", 3600).unwrap();
+            let refresh_token = crate::jwt::generate_jwt(username, "super_secret_key_change_me", 3600 * 24 * 7).unwrap();
+            let id_token = crate::jwt::generate_jwt(username, "super_secret_key_change_me", 3600).unwrap();
+            
+            return Json(TokenResponse {
+                access_token,
+                token_type: "Bearer".to_string(),
+                expires_in: 3600,
+                refresh_token,
+                id_token,
+            }).into_response();
+        }
+    }
+    
+    (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "invalid_grant"}))).into_response()
 }
 
 pub fn router(db: DatabaseConnection) -> Router {
@@ -201,5 +255,6 @@ pub fn router(db: DatabaseConnection) -> Router {
         .route("/login", get(login_get).post(login_post))
         .route("/login-events", get(login_events_get))
         .route("/consent", get(consent_get).post(consent_post))
+        .route("/token", post(token_post))
         .with_state(state)
 }
