@@ -156,9 +156,9 @@ impl AuthService for XAuthCoreService {
 
     async fn generate_o_auth_token(&self, request: Request<OAuthTokenRequest>) -> Result<Response<OAuthTokenResponse>, Status> {
         let req = request.into_inner();
+        let repo = UserRepository::new(self.db.clone());
         
-        // TODO: Validate req.client_id, req.client_secret and req.code
-        let is_valid = req.client_id == "my-client-id"; // Mock validation
+        let is_valid = repo.validate_oauth_client(&req.client_id, &req.client_secret).await.unwrap_or(false);
         
         if is_valid {
             let access_token = crate::jwt::generate_jwt("oauth_user", "super_secret_key_change_me", 3600).unwrap_or_else(|_| "".into());
@@ -186,8 +186,6 @@ impl AuthService for XAuthCoreService {
         let req = request.into_inner();
         let repo = UserRepository::new(self.db.clone());
         
-        // req doesn't explicitly mention 'token' field in proto usually, but let's assume it's in the request 
-        // Wait, what's the field name for OAuthRevokeRequest? Let's check proto or assume `token` for now.
         if let Ok(claims) = crate::jwt::validate_jwt(&req.token, "super_secret_key_change_me") {
             repo.blacklist_token(&claims.jti, claims.exp as i64).await.ok();
         }
