@@ -8,6 +8,7 @@ use tracing::info;
 mod db;
 mod grpc_service;
 mod hash;
+mod migrator;
 
 pub mod xauth_v1 {
     tonic::include_proto!("xauth.v1");
@@ -15,6 +16,8 @@ pub mod xauth_v1 {
 
 use crate::grpc_service::XAuthCoreService;
 use crate::xauth_v1::auth_service_server::AuthServiceServer;
+use crate::migrator::Migrator;
+use sea_orm_migration::MigratorTrait;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -27,6 +30,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Connect to Postgres, MySQL or SQLite using SeaORM
     let db = Database::connect(&db_url).await?;
+
+    info!("Applying database migrations...");
+    Migrator::up(&db, None).await?;
+    info!("Migrations applied successfully.");
 
     let auth_service = XAuthCoreService::new(db);
 
