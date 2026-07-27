@@ -22,6 +22,8 @@ struct ConsentTemplate {
     client_id: String,
     redirect_uri: String,
     state: String,
+    username: String,
+    scopes_list: String,
 }
 
 #[derive(Deserialize)]
@@ -90,6 +92,8 @@ async fn consent_get(Query(q): Query<LoginQuery>) -> impl IntoResponse {
         client_id: q.client_id.unwrap_or_default(),
         redirect_uri: q.redirect_uri.unwrap_or_default(),
         state: q.state.unwrap_or_default(),
+        username: "Player".to_string(), // TODO: Fetch actual username
+        scopes_list: "profile".to_string(),
     };
     Html(template.render().unwrap())
 }
