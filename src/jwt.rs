@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
+    pub jti: String,
     pub exp: usize,
     pub iat: usize,
 }
@@ -14,9 +15,11 @@ pub fn generate_jwt(username: &str, secret: &str, expiration_seconds: usize) -> 
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards")
         .as_secs() as usize;
+    let jti = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string();
         
     let claims = Claims {
         sub: username.to_owned(),
+        jti,
         iat: now,
         exp: now + expiration_seconds,
     };
