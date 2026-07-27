@@ -48,6 +48,7 @@ pub struct JwtSettings {
     pub session_ttl: usize,
     pub auth_code_ttl: usize,
     pub access_token_ttl: usize,
+    pub refresh_token_ttl: usize,
 }
 
 #[derive(Debug, Deserialize, Clone)]
