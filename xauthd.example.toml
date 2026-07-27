@@ -14,3 +14,20 @@ url = "sqlite://data.sqlite?mode=rwc"
 grpc_address = "0.0.0.0:50051"
 # Address and port for the Web HTTP server (OAuth2, OIDC, web dashboard)
 web_address = "0.0.0.0:8080"
+
+[password_hashing]
+# Available algorithms: BCRYPT, ARGON2ID
+algorithm = "BCRYPT"
+
+[password_hashing.options.BCRYPT]
+# The algorithmic cost that should be used. Ranges from 4 to 31.
+# Higher cost means more secure but slower hashing. Recommended: 10-12.
+cost = 10
+
+[password_hashing.options.ARGON2ID]
+# Maximum memory (in kibibytes) that Argon2 will use. Default: 65536 (64MB).
+memory_cost = 65536
+# Maximum amount of time (in iterations) that Argon2 will spend. Default: 4.
+time_cost = 4
+# Number of threads that Argon2 will use. Default: 1.
+threads = 1
