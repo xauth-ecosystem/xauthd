@@ -128,7 +128,6 @@ struct AppStateInner {
     db: DatabaseConnection,
     login_channels: RwLock<HashMap<String, mpsc::Receiver<String>>>,
     rsa_key: rsa::RsaPrivateKey,
-    revoked_tokens: RwLock<std::collections::HashSet<String>>,
 }
 
 type AppState = Arc<AppStateInner>;
@@ -350,17 +349,20 @@ async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>
     (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "invalid_grant"}))).into_response()
 }
 
-async fn user_get(headers: axum::http::HeaderMap) -> impl IntoResponse {
+async fn user_get(State(state): State<AppState>, headers: axum::http::HeaderMap) -> impl IntoResponse {
+    let repo = UserRepository::new(state.db.clone());
     if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
         if let Ok(auth_str) = auth_header.to_str() {
             if auth_str.starts_with("Bearer ") {
                 let token = &auth_str["Bearer ".len()..];
                 if let Ok(claims) = crate::jwt::validate_jwt(token, "super_secret_key_change_me") {
-                    return (axum::http::StatusCode::OK, Json(serde_json::json!({
-                        "sub": claims.sub.clone(),
-                        "preferred_username": claims.sub.clone(),
-                        "name": claims.sub
-                    }))).into_response();
+                    if !repo.is_token_blacklisted(&claims.jti).await.unwrap_or(false) {
+                        return (axum::http::StatusCode::OK, Json(serde_json::json!({
+                            "sub": claims.sub.clone(),
+                            "preferred_username": claims.sub.clone(),
+                            "name": claims.sub
+                        }))).into_response();
+                    }
                 }
             }
         }
@@ -376,8 +378,7 @@ async fn introspect_post(State(state): State<AppState>, Form(req): Form<Introspe
     }
 
     if let Ok(claims) = crate::jwt::validate_jwt(&req.token, "super_secret_key_change_me") {
-        let revoked = state.revoked_tokens.read().await;
-        if !revoked.contains(&claims.jti) {
+        if !repo.is_token_blacklisted(&claims.jti).await.unwrap_or(false) {
             return (axum::http::StatusCode::OK, Json(serde_json::json!({
                 "active": true,
                 "sub": claims.sub,
@@ -401,8 +402,6 @@ async fn revoke_post(State(state): State<AppState>, Form(req): Form<RevokeReques
 
     if let Ok(claims) = crate::jwt::validate_jwt(&req.token, "super_secret_key_change_me") {
         repo.blacklist_token(&claims.jti, claims.exp as i64).await.ok();
-        let mut revoked = state.revoked_tokens.write().await;
-        revoked.insert(claims.jti);
     }
     
     axum::http::StatusCode::OK.into_response()
@@ -431,7 +430,6 @@ pub fn router(db: DatabaseConnection) -> Router {
     let state = Arc::new(AppStateInner {
         db,
         login_channels: RwLock::new(HashMap::new()),
-        revoked_tokens: RwLock::new(std::collections::HashSet::new()),
         rsa_key,
     });
 
