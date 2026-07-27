@@ -1,0 +1,149 @@
+syntax = "proto3";
+
+package xauth.v1;
+
+option java_multiple_files = true;
+option java_package = "com.chernegasergiy.xauth.grpc";
+option java_outer_classname = "XAuthProto";
+option php_namespace = "ChernegaSergiy\\XAuth\\Grpc";
+
+service AuthService {
+    rpc ProcessAuthStep (AuthStepRequest) returns (AuthStepResponse);
+    rpc ValidateSession (SessionRequest) returns (SessionResponse);
+    rpc EndSession (EndSessionRequest) returns (EndSessionResponse);
+
+    rpc ConnectServer (stream PluginEvent) returns (stream CoreCommand);
+
+    rpc GenerateOAuthToken (OAuthTokenRequest) returns (OAuthTokenResponse);
+    rpc RevokeOAuthToken (OAuthRevokeRequest) returns (OAuthRevokeResponse);
+    
+    rpc GetPlayerInfo (PlayerInfoRequest) returns (PlayerInfoResponse);
+    rpc ForcePasswordChange (ForcePasswordChangeRequest) returns (ForcePasswordChangeResponse);
+}
+
+message AuthStepRequest {
+    string username = 1;
+    string ip_address = 2;
+    string server_id = 3;
+    
+    enum StepType {
+        PASSWORD = 0;
+        REGISTER = 1;
+        TWO_FACTOR_CODE = 2;
+        CAPTCHA = 3;
+        AUTO_LOGIN_ATTEMPT = 4;
+    }
+    StepType type = 4;
+    string input_data = 5; 
+}
+
+message AuthStepResponse {
+    bool success = 1;
+    string message = 2;
+    
+    enum NextAction {
+        AUTHENTICATED = 0;
+        REQUIRE_PASSWORD = 1;
+        REQUIRE_REGISTER = 2;
+        REQUIRE_2FA = 3;
+        REQUIRE_CAPTCHA = 4;
+        KICK = 5;
+    }
+    NextAction next_action = 3;
+    string session_token = 4;
+}
+
+message SessionRequest {
+    string session_token = 1;
+    string ip_address = 2;
+}
+
+message SessionResponse {
+    bool is_valid = 1;
+    string username = 2;
+    int64 expires_at = 3;
+}
+
+message EndSessionRequest {
+    string username = 1;
+    string session_token = 2;
+}
+
+message EndSessionResponse {
+    bool success = 1;
+}
+
+message PluginEvent {
+    string server_id = 1;
+    
+    enum EventType {
+        SERVER_START = 0;
+        SERVER_STOP = 1;
+        PLAYER_JOIN = 2;
+        PLAYER_QUIT = 3;
+        STATE_UPDATE = 4;
+    }
+    EventType type = 2;
+    string username = 3;
+    string ip_address = 4;
+}
+
+message CoreCommand {
+    enum CommandType {
+        KICK_PLAYER = 0;
+        SEND_MESSAGE = 1;
+        FORCE_STATE_SYNC = 2;
+        REQUIRE_REAUTH = 3;
+    }
+    CommandType type = 1;
+    string target_username = 2;
+    string payload = 3;
+}
+
+message OAuthTokenRequest {
+    string client_id = 1;
+    string client_secret = 2;
+    string code = 3;
+    string redirect_uri = 4;
+}
+
+message OAuthTokenResponse {
+    bool success = 1;
+    string access_token = 2;
+    string refresh_token = 3;
+    int32 expires_in = 4;
+    string error = 5;
+}
+
+message OAuthRevokeRequest {
+    string token = 1;
+    string client_id = 2;
+}
+
+message OAuthRevokeResponse {
+    bool success = 1;
+}
+
+message PlayerInfoRequest {
+    string target_username = 1;
+    string requestor_id = 2;
+}
+
+message PlayerInfoResponse {
+    bool exists = 1;
+    string username = 2;
+    bool is_banned = 3;
+    bool has_2fa = 4;
+    string last_ip = 5;
+    int64 last_login = 6;
+    int32 failed_attempts = 7;
+}
+
+message ForcePasswordChangeRequest {
+    string target_username = 1;
+    bool immediate_kick = 2;
+}
+
+message ForcePasswordChangeResponse {
+    bool success = 1;
+}
