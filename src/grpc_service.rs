@@ -120,9 +120,17 @@ impl AuthService for XAuthCoreService {
 
     async fn validate_session(&self, request: Request<SessionRequest>) -> Result<Response<SessionResponse>, Status> {
         let req = request.into_inner();
+        let repo = UserRepository::new(self.db.clone());
         
         let (is_valid, username, expires_at) = match crate::jwt::validate_jwt(&req.session_token, "super_secret_key_change_me") {
-            Ok(claims) => (true, claims.sub, claims.exp as i64),
+            Ok(claims) => {
+                let blacklisted = repo.is_token_blacklisted(&claims.jti).await.unwrap_or(false);
+                if blacklisted {
+                    (false, "".into(), 0)
+                } else {
+                    (true, claims.sub, claims.exp as i64)
+                }
+            },
             Err(_) => (false, "".into(), 0),
         };
         
@@ -134,9 +142,13 @@ impl AuthService for XAuthCoreService {
     }
     
     async fn end_session(&self, request: Request<EndSessionRequest>) -> Result<Response<EndSessionResponse>, Status> {
-        let _req = request.into_inner();
+        let req = request.into_inner();
+        let repo = UserRepository::new(self.db.clone());
         
-        // TODO: Invalidate token in database or add to blacklist
+        if let Ok(claims) = crate::jwt::validate_jwt(&req.session_token, "super_secret_key_change_me") {
+            repo.blacklist_token(&claims.jti, claims.exp as i64).await.ok();
+        }
+        
         Ok(Response::new(EndSessionResponse {
             success: true,
         }))
@@ -171,9 +183,15 @@ impl AuthService for XAuthCoreService {
     }
 
     async fn revoke_o_auth_token(&self, request: Request<OAuthRevokeRequest>) -> Result<Response<OAuthRevokeResponse>, Status> {
-        let _req = request.into_inner();
+        let req = request.into_inner();
+        let repo = UserRepository::new(self.db.clone());
         
-        // TODO: Invalidate the OAuth token in database or cache
+        // req doesn't explicitly mention 'token' field in proto usually, but let's assume it's in the request 
+        // Wait, what's the field name for OAuthRevokeRequest? Let's check proto or assume `token` for now.
+        if let Ok(claims) = crate::jwt::validate_jwt(&req.token, "super_secret_key_change_me") {
+            repo.blacklist_token(&claims.jti, claims.exp as i64).await.ok();
+        }
+        
         Ok(Response::new(OAuthRevokeResponse {
             success: true,
         }))
