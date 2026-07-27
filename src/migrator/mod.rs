@@ -4,6 +4,7 @@ mod m20260727_000001_create_user_table;
 mod m20260727_000002_create_token_blacklist;
 mod m20260727_000003_create_oauth_clients;
 mod m20260727_000004_create_sessions_table;
+mod m20260727_000005_create_oauth_tokens_table;
 
 pub struct Migrator;
 
@@ -15,6 +16,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260727_000002_create_token_blacklist::Migration),
             Box::new(m20260727_000003_create_oauth_clients::Migration),
             Box::new(m20260727_000004_create_sessions_table::Migration),
+            Box::new(m20260727_000005_create_oauth_tokens_table::Migration),
         ]
     }
 }
