@@ -104,11 +104,15 @@ struct TokenRequest {
 #[derive(Deserialize)]
 struct IntrospectRequest {
     token: String,
+    client_id: String,
+    client_secret: String,
 }
 
 #[derive(Deserialize)]
 struct RevokeRequest {
     token: String,
+    client_id: String,
+    client_secret: String,
 }
 
 #[derive(Serialize)]
@@ -124,6 +128,7 @@ struct AppStateInner {
     db: DatabaseConnection,
     login_channels: RwLock<HashMap<String, mpsc::Receiver<String>>>,
     rsa_key: rsa::RsaPrivateKey,
+    revoked_tokens: RwLock<std::collections::HashSet<String>>,
 }
 
 type AppState = Arc<AppStateInner>;
@@ -345,20 +350,40 @@ async fn user_get(headers: axum::http::HeaderMap) -> impl IntoResponse {
     (axum::http::StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "invalid_token"}))).into_response()
 }
 
-async fn introspect_post(Form(req): Form<IntrospectRequest>) -> impl IntoResponse {
+async fn introspect_post(State(state): State<AppState>, Form(req): Form<IntrospectRequest>) -> impl IntoResponse {
+    let repo = UserRepository::new(state.db.clone());
+    let is_valid = repo.validate_oauth_client(&req.client_id, &req.client_secret).await.unwrap_or(false);
+    if !is_valid {
+        return (axum::http::StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "invalid_client"}))).into_response();
+    }
+
     if let Ok(claims) = crate::jwt::validate_jwt(&req.token, "super_secret_key_change_me") {
-        return (axum::http::StatusCode::OK, Json(serde_json::json!({
-            "active": true,
-            "sub": claims.sub,
-            "exp": claims.exp,
-            "iat": claims.iat
-        }))).into_response();
+        let revoked = state.revoked_tokens.read().await;
+        if !revoked.contains(&claims.jti) {
+            return (axum::http::StatusCode::OK, Json(serde_json::json!({
+                "active": true,
+                "sub": claims.sub,
+                "exp": claims.exp,
+                "iat": claims.iat
+            }))).into_response();
+        }
     }
     
     (axum::http::StatusCode::OK, Json(serde_json::json!({"active": false}))).into_response()
 }
 
-async fn revoke_post(Form(_req): Form<RevokeRequest>) -> impl IntoResponse {
+async fn revoke_post(State(state): State<AppState>, Form(req): Form<RevokeRequest>) -> impl IntoResponse {
+    let repo = UserRepository::new(state.db.clone());
+    let is_valid = repo.validate_oauth_client(&req.client_id, &req.client_secret).await.unwrap_or(false);
+    if !is_valid {
+        return (axum::http::StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "invalid_client"}))).into_response();
+    }
+
+    if let Ok(claims) = crate::jwt::validate_jwt(&req.token, "super_secret_key_change_me") {
+        let mut revoked = state.revoked_tokens.write().await;
+        revoked.insert(claims.jti);
+    }
+    
     axum::http::StatusCode::OK
 }
 
@@ -385,6 +410,7 @@ pub fn router(db: DatabaseConnection) -> Router {
     let state = Arc::new(AppStateInner {
         db,
         login_channels: RwLock::new(HashMap::new()),
+        revoked_tokens: RwLock::new(std::collections::HashSet::new()),
         rsa_key,
     });
 
