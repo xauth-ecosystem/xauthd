@@ -101,7 +101,7 @@ struct AppStateInner {
 
 type AppState = Arc<AppStateInner>;
 
-async fn login_get(Query(q): Query<LoginQuery>) -> impl IntoResponse {
+async fn authorize_get(Query(q): Query<LoginQuery>) -> impl IntoResponse {
     let template = LoginTemplate {
         error: q.error,
         client_id: q.client_id.unwrap_or_default(),
@@ -261,7 +261,8 @@ pub fn router(db: DatabaseConnection) -> Router {
     });
 
     Router::new()
-        .route("/login", get(login_get).post(login_post))
+        .route("/authorize", get(authorize_get))
+        .route("/login", post(login_post))
         .route("/login-events", get(login_events_get))
         .route("/consent", get(consent_get).post(consent_post))
         .route("/token", post(token_post))
