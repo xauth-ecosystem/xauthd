@@ -198,7 +198,7 @@ async fn login_post(State(state): State<AppState>, Form(f): Form<LoginForm>) -> 
     }))
 }
 
-fn get_username_from_cookie(headers: &axum::http::HeaderMap) -> String {
+fn get_username_from_cookie(headers: &axum::http::HeaderMap, state: &AppState) -> String {
     if let Some(cookie_val) = headers.get(axum::http::header::COOKIE) {
         if let Ok(cookie_str) = cookie_val.to_str() {
             for part in cookie_str.split(';') {
@@ -231,7 +231,7 @@ async fn login_events_get(State(state): State<AppState>, Query(q): Query<SseQuer
 }
 
 async fn consent_get(headers: axum::http::HeaderMap, State(state): State<AppState>, Query(q): Query<LoginQuery>) -> impl IntoResponse {
-    let username = get_username_from_cookie(&headers);
+    let username = get_username_from_cookie(&headers, &state);
     let repo = UserRepository::new(state.db.clone());
     let mut allowed_scopes = "profile".to_string();
     
@@ -256,9 +256,9 @@ async fn consent_get(headers: axum::http::HeaderMap, State(state): State<AppStat
     Html(template.render().unwrap())
 }
 
-async fn consent_post(headers: axum::http::HeaderMap, Form(f): Form<ConsentForm>) -> impl IntoResponse {
+async fn consent_post(headers: axum::http::HeaderMap, State(state): State<AppState>, Form(f): Form<ConsentForm>) -> impl IntoResponse {
     if f.action == "approve" {
-        let username = get_username_from_cookie(&headers);
+        let username = get_username_from_cookie(&headers, &state);
         let subject = serde_json::to_string(&serde_json::json!({
             "u": username,
             "c": f.client_id,
