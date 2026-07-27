@@ -45,6 +45,7 @@ pub struct PasswordHashingSettings {
 pub struct JwtSettings {
     pub secret: String,
     pub rsa_private_key_path: String,
+    pub session_ttl: usize,
 }
 
 #[derive(Debug, Deserialize, Clone)]
