@@ -325,19 +325,24 @@ async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>
                     }
                 }
                 
-                let access_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600).unwrap();
-                let refresh_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600 * 24 * 7).unwrap();
-                let n = data["n"].as_str().unwrap_or_default();
-                let nonce_opt = if n.is_empty() { None } else { Some(n.to_string()) };
-                let id_token = crate::jwt::generate_rs256_jwt(u, &state.rsa_key, 3600, nonce_opt).unwrap();
-                
-                return Json(TokenResponse {
-                    access_token,
-                    token_type: "Bearer".to_string(),
-                    expires_in: 3600,
-                    refresh_token,
-                    id_token,
-                }).into_response();
+                if let Ok(Some(user)) = repo.get_user_by_name(u).await {
+                    let access_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600).unwrap();
+                    let refresh_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600 * 24 * 7).unwrap();
+                    let n = data["n"].as_str().unwrap_or_default();
+                    let nonce_opt = if n.is_empty() { None } else { Some(n.to_string()) };
+                    let id_token = crate::jwt::generate_rs256_jwt(u, &state.rsa_key, 3600, nonce_opt).unwrap();
+                    
+                    let scopes = "openid profile";
+                    repo.create_oauth_token(&req.client_id, user.id, &access_token, Some(&refresh_token), 3600, scopes).await.ok();
+
+                    return Json(TokenResponse {
+                        access_token,
+                        token_type: "Bearer".to_string(),
+                        expires_in: 3600,
+                        refresh_token,
+                        id_token,
+                    }).into_response();
+                }
             }
         }
     }
@@ -392,7 +397,10 @@ async fn revoke_post(State(state): State<AppState>, Form(req): Form<RevokeReques
         return (axum::http::StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "invalid_client"}))).into_response();
     }
 
+    repo.delete_oauth_token(&req.token).await.ok();
+
     if let Ok(claims) = crate::jwt::validate_jwt(&req.token, "super_secret_key_change_me") {
+        repo.blacklist_token(&claims.jti, claims.exp as i64).await.ok();
         let mut revoked = state.revoked_tokens.write().await;
         revoked.insert(claims.jti);
     }
