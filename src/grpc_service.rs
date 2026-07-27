@@ -4,22 +4,31 @@ use crate::xauth_v1::{
     EndSessionResponse, ForcePasswordChangeRequest, ForcePasswordChangeResponse,
     OAuthRevokeRequest, OAuthRevokeResponse, OAuthTokenRequest, OAuthTokenResponse,
     PlayerInfoRequest, PlayerInfoResponse, PluginEvent, SessionRequest, SessionResponse,
-    auth_step_response::NextAction,
+    auth_step_response::NextAction, core_command::CommandType,
 };
 use crate::db::UserRepository;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use sea_orm::DatabaseConnection;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 use tracing::info;
 
+type ClientSender = mpsc::Sender<Result<CoreCommand, Status>>;
+
 pub struct XAuthCoreService {
     db: DatabaseConnection,
+    clients: Arc<RwLock<HashMap<String, ClientSender>>>,
 }
 
 impl XAuthCoreService {
     pub fn new(db: DatabaseConnection) -> Self {
-        Self { db }
+        Self {
+            db,
+            clients: Arc::new(RwLock::new(HashMap::new())),
+        }
     }
 }
 
@@ -32,11 +41,23 @@ impl AuthService for XAuthCoreService {
         request: Request<Streaming<PluginEvent>>,
     ) -> Result<Response<Self::ConnectServerStream>, Status> {
         let mut in_stream = request.into_inner();
-        let (_tx, rx) = mpsc::channel(100);
+        let (tx, rx) = mpsc::channel(100);
+        let clients = self.clients.clone();
 
         tokio::spawn(async move {
+            let mut registered_server_id = None;
             while let Ok(Some(event)) = in_stream.message().await {
+                if registered_server_id.is_none() {
+                    registered_server_id = Some(event.server_id.clone());
+                    clients.write().await.insert(event.server_id.clone(), tx.clone());
+                    info!("Registered streaming channel for server: {}", event.server_id);
+                }
                 info!("Event from {}: {:?}", event.server_id, event.r#type);
+            }
+            
+            if let Some(id) = registered_server_id {
+                clients.write().await.remove(&id);
+                info!("Unregistered streaming channel for server: {}", id);
             }
         });
 
@@ -235,7 +256,19 @@ impl AuthService for XAuthCoreService {
         match repo.get_user_by_name(&req.target_username).await {
             Ok(Some(user)) => {
                 repo.set_must_change_password(user.id, true).await.ok();
-                // TODO: If req.immediate_kick is true, send KickPlayer command via streaming channel
+                
+                if req.immediate_kick {
+                    let cmd = CoreCommand {
+                        r#type: CommandType::KickPlayer as i32,
+                        target_username: req.target_username.clone(),
+                        payload: "You must change your password. Please re-login.".into(),
+                    };
+                    
+                    let clients_guard = self.clients.read().await;
+                    for tx in clients_guard.values() {
+                        let _ = tx.send(Ok(cmd.clone())).await;
+                    }
+                }
                 Ok(Response::new(ForcePasswordChangeResponse {
                     success: true,
                 }))
