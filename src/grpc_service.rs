@@ -20,13 +20,15 @@ type ClientSender = mpsc::Sender<Result<CoreCommand, Status>>;
 
 pub struct XAuthCoreService {
     db: DatabaseConnection,
+    settings: Arc<crate::config::Settings>,
     clients: Arc<RwLock<HashMap<String, ClientSender>>>,
 }
 
 impl XAuthCoreService {
-    pub fn new(db: DatabaseConnection) -> Self {
+    pub fn new(db: DatabaseConnection, settings: Arc<crate::config::Settings>) -> Self {
         Self {
             db,
+            settings,
             clients: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -121,7 +123,7 @@ impl AuthService for XAuthCoreService {
                 }
             },
             1 => {
-                let hash = crate::hash::hash_password(&req.input_data)
+                let hash = crate::hash::hash_password(&req.input_data, &self.settings.password_hashing)
                     .map_err(|_| Status::internal("Hash failed"))?;
                 
                 repo.create_user(&req.username, &hash).await
