@@ -101,7 +101,7 @@ impl AuthService for XAuthCoreService {
                             session_token: "".into(),
                         }))
                     } else {
-                        let token = crate::jwt::generate_jwt(&user.username, "super_secret_key_change_me", 3600 * 24).unwrap_or_else(|_| "".into());
+                        let token = crate::jwt::generate_jwt(&user.username, &self.settings.jwt.secret, 3600 * 24).unwrap_or_else(|_| "".into());
                         repo.create_session(user.id, &token, &req.ip_address, 3600 * 24).await.ok();
                         repo.update_last_login(user.id, &req.ip_address).await.ok();
                         
@@ -129,7 +129,7 @@ impl AuthService for XAuthCoreService {
                 repo.create_user(&req.username, &hash).await
                     .map_err(|_| Status::already_exists("User exists"))?;
 
-                let token = crate::jwt::generate_jwt(&req.username, "super_secret_key_change_me", 3600 * 24).unwrap_or_else(|_| "".into());
+                let token = crate::jwt::generate_jwt(&req.username, &self.settings.jwt.secret, 3600 * 24).unwrap_or_else(|_| "".into());
                 if let Ok(Some(u)) = repo.get_user_by_name(&req.username).await {
                     repo.create_session(u.id, &token, &req.ip_address, 3600 * 24).await.ok();
                 }
@@ -156,7 +156,7 @@ impl AuthService for XAuthCoreService {
         if let Ok(Some(session)) = repo.get_session(&req.session_token).await {
             let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
             if session.expires_at > now {
-                if let Ok(claims) = crate::jwt::validate_jwt(&req.session_token, "super_secret_key_change_me") {
+                if let Ok(claims) = crate::jwt::validate_jwt(&req.session_token, &self.settings.jwt.secret) {
                     is_valid = true;
                     username = claims.sub;
                     expires_at = session.expires_at;
@@ -196,7 +196,7 @@ impl AuthService for XAuthCoreService {
             }));
         }
 
-        if let Ok(claims) = crate::jwt::validate_jwt(&req.code, "super_secret_key_change_me") {
+        if let Ok(claims) = crate::jwt::validate_jwt(&req.code, &self.settings.jwt.secret) {
             if let Ok(data) = serde_json::from_str::<serde_json::Value>(&claims.sub) {
                 let u = data["u"].as_str().unwrap_or_default();
                 let c = data["c"].as_str().unwrap_or_default();
@@ -204,8 +204,8 @@ impl AuthService for XAuthCoreService {
                 
                 if c == req.client_id && r == req.redirect_uri {
                     if let Ok(Some(user)) = repo.get_user_by_name(u).await {
-                        let access_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600).unwrap_or_default();
-                        let refresh_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600 * 24 * 7).unwrap_or_default();
+                        let access_token = crate::jwt::generate_jwt(u, &self.settings.jwt.secret, 3600).unwrap_or_default();
+                        let refresh_token = crate::jwt::generate_jwt(u, &self.settings.jwt.secret, 3600 * 24 * 7).unwrap_or_default();
                         let scopes = "openid profile";
 
                         repo.create_oauth_token(&req.client_id, user.id, &access_token, Some(&refresh_token), 3600, scopes).await.ok();
@@ -237,7 +237,7 @@ impl AuthService for XAuthCoreService {
         
         repo.delete_oauth_token(&req.token).await.ok();
         
-        if let Ok(claims) = crate::jwt::validate_jwt(&req.token, "super_secret_key_change_me") {
+        if let Ok(claims) = crate::jwt::validate_jwt(&req.token, &self.settings.jwt.secret) {
             repo.blacklist_token(&claims.jti, claims.exp as i64).await.ok();
         }
         
