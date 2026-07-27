@@ -122,7 +122,7 @@ impl AuthService for XAuthCoreService {
         let req = request.into_inner();
         
         let (is_valid, username, expires_at) = match crate::jwt::validate_jwt(&req.session_token, "super_secret_key_change_me") {
-            Ok(claims) => (true, claims.sub, claims.exp as u64),
+            Ok(claims) => (true, claims.sub, claims.exp as i64),
             Err(_) => (false, "".into(), 0),
         };
         
