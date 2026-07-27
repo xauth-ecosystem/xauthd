@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Авторизація | XAuth eHealth Portal</title>
+    <!-- Semantic UI CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.5.0/semantic.min.css">
+    <style>
+        body {
+            background-color: #f4f7f6;
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .login-container {
+            width: 100%;
+            max-width: 450px;
+        }
+        .ui.segment.portal-card {
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            padding: 30px;
+            border: none;
+            border-top: 5px solid #2185d0; /* eHealth primary blue */
+        }
+        .portal-header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+        .portal-header .icon {
+            font-size: 3em;
+            color: #2185d0;
+            margin-bottom: 10px;
+        }
+        .portal-header h2 {
+            margin: 0;
+            color: #333;
+            font-weight: 600;
+        }
+        .portal-header p {
+            color: #777;
+            margin-top: 5px;
+        }
+        .ui.button.primary {
+            background-color: #2185d0;
+            border-radius: 8px;
+            font-size: 1.1em;
+            padding: 12px;
+        }
+        .ui.button.primary:hover {
+            background-color: #1678c2;
+        }
+        .ui.input input {
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="ui segment portal-card">
+            <div class="portal-header">
+                <i class="shield alternate icon"></i>
+                <h2>Вхід у систему</h2>
+                <p>Єдина система авторизації XAuth</p>
+            </div>
+            
+            {% if let Some(err) = error %}
+            <div class="ui negative message">
+                <p>{{ err }}</p>
+            </div>
+            {% endif %}
+
+            <form class="ui large form" method="POST" action="/login">
+                <!-- If there's an OAuth request pending, pass its parameters -->
+                {% if let Some(client_id) = client_id %}
+                <input type="hidden" name="client_id" value="{{ client_id }}">
+                <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
+                <input type="hidden" name="state" value="{{ state }}">
+                {% endif %}
+
+                <div class="field">
+                    <label>Ім'я користувача (Нікнейм)</label>
+                    <div class="ui left icon input">
+                        <i class="user icon"></i>
+                        <input type="text" name="username" placeholder="Ваш нікнейм" required>
+                    </div>
+                </div>
+                <div class="field">
+                    <label>Пароль</label>
+                    <div class="ui left icon input">
+                        <i class="lock icon"></i>
+                        <input type="password" name="password" placeholder="Ваш пароль" required>
+                    </div>
+                </div>
+                <button class="ui fluid large primary submit button" type="submit">Увійти</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
