@@ -100,6 +100,7 @@ impl AuthService for XAuthCoreService {
                         }))
                     } else {
                         let token = crate::jwt::generate_jwt(&user.username, "super_secret_key_change_me", 3600 * 24).unwrap_or_else(|_| "".into());
+                        repo.create_session(user.id, &token, &req.ip_address, 3600 * 24).await.ok();
                         repo.update_last_login(user.id, &req.ip_address).await.ok();
                         
                         Ok(Response::new(AuthStepResponse {
@@ -127,6 +128,9 @@ impl AuthService for XAuthCoreService {
                     .map_err(|_| Status::already_exists("User exists"))?;
 
                 let token = crate::jwt::generate_jwt(&req.username, "super_secret_key_change_me", 3600 * 24).unwrap_or_else(|_| "".into());
+                if let Ok(Some(u)) = repo.get_user_by_name(&req.username).await {
+                    repo.create_session(u.id, &token, &req.ip_address, 3600 * 24).await.ok();
+                }
 
                 Ok(Response::new(AuthStepResponse {
                     success: true,
@@ -143,17 +147,20 @@ impl AuthService for XAuthCoreService {
         let req = request.into_inner();
         let repo = UserRepository::new(self.db.clone());
         
-        let (is_valid, username, expires_at) = match crate::jwt::validate_jwt(&req.session_token, "super_secret_key_change_me") {
-            Ok(claims) => {
-                let blacklisted = repo.is_token_blacklisted(&claims.jti).await.unwrap_or(false);
-                if blacklisted {
-                    (false, "".into(), 0)
-                } else {
-                    (true, claims.sub, claims.exp as i64)
+        let mut is_valid = false;
+        let mut username = String::new();
+        let mut expires_at = 0;
+
+        if let Ok(Some(session)) = repo.get_session(&req.session_token).await {
+            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+            if session.expires_at > now {
+                if let Ok(claims) = crate::jwt::validate_jwt(&req.session_token, "super_secret_key_change_me") {
+                    is_valid = true;
+                    username = claims.sub;
+                    expires_at = session.expires_at;
                 }
-            },
-            Err(_) => (false, "".into(), 0),
-        };
+            }
+        }
         
         Ok(Response::new(SessionResponse {
             is_valid,
@@ -166,9 +173,7 @@ impl AuthService for XAuthCoreService {
         let req = request.into_inner();
         let repo = UserRepository::new(self.db.clone());
         
-        if let Ok(claims) = crate::jwt::validate_jwt(&req.session_token, "super_secret_key_change_me") {
-            repo.blacklist_token(&claims.jti, claims.exp as i64).await.ok();
-        }
+        repo.delete_session(&req.session_token).await.ok();
         
         Ok(Response::new(EndSessionResponse {
             success: true,
