@@ -1,6 +1,5 @@
 use dotenvy::dotenv;
 use sea_orm::Database;
-use std::env;
 use std::net::SocketAddr;
 use tonic::transport::Server;
 use tracing::info;
