@@ -1,5 +1,5 @@
 use dotenvy::dotenv;
-use sqlx::sqlite::SqlitePoolOptions;
+use sea_orm::Database;
 use std::env;
 use std::net::SocketAddr;
 use tonic::transport::Server;
@@ -23,13 +23,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Starting XAuth Core Daemon...");
 
-    let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://data.sqlite".to_string());
-    let pool = SqlitePoolOptions::new()
-        .max_connections(5)
-        .connect(&db_url)
-        .await?;
+    let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://data.sqlite?mode=rwc".to_string());
+    
+    // Connect to Postgres, MySQL or SQLite using SeaORM
+    let db = Database::connect(&db_url).await?;
 
-    let auth_service = XAuthCoreService::new(pool);
+    let auth_service = XAuthCoreService::new(db);
 
     let addr: SocketAddr = "0.0.0.0:50051".parse()?;
     
