@@ -1,0 +1,16 @@
+# XAuth Core Daemon Configuration
+
+[database]
+# The connection string for the database.
+# Supports SQLite, MySQL, and PostgreSQL out of the box via SeaORM.
+# Examples:
+# SQLite:    sqlite://data.sqlite?mode=rwc
+# MySQL:     mysql://user:password@localhost/xauth
+# Postgres:  postgres://user:password@localhost/xauth
+url = "sqlite://data.sqlite?mode=rwc"
+
+[network]
+# Address and port for the gRPC daemon (backend communication)
+grpc_address = "0.0.0.0:50051"
+# Address and port for the Web HTTP server (OAuth2, OIDC, web dashboard)
+web_address = "0.0.0.0:8080"
