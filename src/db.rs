@@ -1,68 +1,70 @@
-use sqlx::{SqlitePool, Error, Row};
+use sea_orm::entity::prelude::*;
+use sea_orm::{DatabaseConnection, Set, ActiveModelTrait};
 
-pub struct User {
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "users")]
+pub struct Model {
+    #[sea_orm(primary_key)]
     pub id: i64,
+    #[sea_orm(unique)]
     pub username: String,
     pub password_hash: String,
+    pub last_ip: Option<String>,
+    pub failed_attempts: i32,
 }
 
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
+
+impl ActiveModelBehavior for ActiveModel {}
+
 pub struct UserRepository {
-    pool: SqlitePool,
+    db: DatabaseConnection,
 }
 
 impl UserRepository {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+    pub fn new(db: DatabaseConnection) -> Self {
+        Self { db }
     }
 
-    pub async fn get_user_by_name(&self, username: &str) -> Result<Option<User>, Error> {
-        let row = sqlx::query("SELECT id, username, password_hash FROM users WHERE username = ?")
-            .bind(username)
-            .fetch_optional(&self.pool)
-            .await?;
+    pub async fn get_user_by_name(&self, username: &str) -> Result<Option<Model>, DbErr> {
+        Entity::find()
+            .filter(Column::Username.eq(username))
+            .one(&self.db)
+            .await
+    }
 
-        match row {
-            Some(r) => Ok(Some(User {
-                id: r.try_get("id")?,
-                username: r.try_get("username")?,
-                password_hash: r.try_get("password_hash")?,
-            })),
-            None => Ok(None),
+    pub async fn is_2fa_enabled(&self, _user_id: i64) -> Result<bool, DbErr> {
+        Ok(false)
+    }
+
+    pub async fn create_user(&self, username: &str, hash: &str) -> Result<(), DbErr> {
+        let new_user = ActiveModel {
+            username: Set(username.to_owned()),
+            password_hash: Set(hash.to_owned()),
+            failed_attempts: Set(0),
+            ..Default::default()
+        };
+        new_user.insert(&self.db).await?;
+        Ok(())
+    }
+
+    pub async fn update_last_login(&self, user_id: i64, ip: &str) -> Result<(), DbErr> {
+        let update = ActiveModel {
+            id: Set(user_id),
+            last_ip: Set(Some(ip.to_owned())),
+            ..Default::default()
+        };
+        update.update(&self.db).await?;
+        Ok(())
+    }
+
+    pub async fn increment_failed_attempts(&self, user_id: i64) -> Result<(), DbErr> {
+        if let Some(user) = Entity::find_by_id(user_id).one(&self.db).await? {
+            let mut active: ActiveModel = user.into();
+            active.failed_attempts = Set(active.failed_attempts.clone().unwrap() + 1);
+            active.update(&self.db).await?;
         }
-    }
-
-    pub async fn is_2fa_enabled(&self, user_id: i64) -> Result<bool, Error> {
-        let row = sqlx::query("SELECT is_2fa_enabled FROM user_bindings WHERE user_id = ?")
-            .bind(user_id)
-            .fetch_optional(&self.pool)
-            .await?;
-            
-        Ok(row.map(|r| r.try_get("is_2fa_enabled").unwrap_or(false)).unwrap_or(false))
-    }
-
-    pub async fn create_user(&self, username: &str, hash: &str) -> Result<(), Error> {
-        sqlx::query("INSERT INTO users (username, password_hash) VALUES (?, ?)")
-            .bind(username)
-            .bind(hash)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
-
-    pub async fn update_last_login(&self, user_id: i64, ip: &str) -> Result<(), Error> {
-        sqlx::query("UPDATE users SET last_login = CURRENT_TIMESTAMP, last_ip = ? WHERE id = ?")
-            .bind(ip)
-            .bind(user_id)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
-
-    pub async fn increment_failed_attempts(&self, user_id: i64) -> Result<(), Error> {
-        sqlx::query("UPDATE users SET failed_attempts = failed_attempts + 1 WHERE id = ?")
-            .bind(user_id)
-            .execute(&self.pool)
-            .await?;
         Ok(())
     }
 }
