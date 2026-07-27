@@ -46,3 +46,11 @@ auth_code_ttl = 600
 access_token_ttl = 3600
 # Lifespan of an OAuth2 Refresh Token in seconds. Default: 604800 (7 days).
 refresh_token_ttl = 604800
+
+[auth_flow]
+# Order of authentication steps for players who are not registered yet
+register_chain = ["captcha", "register"]
+# Order of authentication steps for players who are already registered
+login_chain = ["password", "totp"]
+# Number of failed attempts allowed per step before the player is kicked
+max_attempts_per_step = 3
