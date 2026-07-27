@@ -98,6 +98,59 @@ pub mod sessions {
     impl ActiveModelBehavior for ActiveModel {}
 }
 
+pub mod oauth_tokens {
+    use sea_orm::entity::prelude::*;
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "oauth_tokens")]
+    pub struct Model {
+        #[sea_orm(primary_key)]
+        pub id: i64,
+        pub client_id: String,
+        pub user_id: i64,
+        #[sea_orm(unique)]
+        pub access_token: String,
+        #[sea_orm(unique)]
+        pub refresh_token: Option<String>,
+        pub expires_at: i64,
+        pub scopes: String,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {
+        #[sea_orm(
+            belongs_to = "crate::db::Entity",
+            from = "Column::UserId",
+            to = "crate::db::Column::Id",
+            on_update = "NoAction",
+            on_delete = "Cascade"
+        )]
+        User,
+        #[sea_orm(
+            belongs_to = "crate::db::oauth_clients::Entity",
+            from = "Column::ClientId",
+            to = "crate::db::oauth_clients::Column::ClientId",
+            on_update = "NoAction",
+            on_delete = "Cascade"
+        )]
+        OAuthClient,
+    }
+
+    impl Related<crate::db::Entity> for Entity {
+        fn to() -> RelationDef {
+            Relation::User.def()
+        }
+    }
+
+    impl Related<crate::db::oauth_clients::Entity> for Entity {
+        fn to() -> RelationDef {
+            Relation::OAuthClient.def()
+        }
+    }
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
 pub struct UserRepository {
     db: DatabaseConnection,
 }
@@ -225,6 +278,39 @@ impl UserRepository {
     pub async fn delete_session(&self, token: &str) -> Result<(), DbErr> {
         if let Some(session) = self.get_session(token).await? {
             sessions::Entity::delete_by_id(session.id).exec(&self.db).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn create_oauth_token(&self, client_id: &str, user_id: i64, access_token: &str, refresh_token: Option<&str>, expires_in_sec: i64, scopes: &str) -> Result<(), DbErr> {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+        let new_token = oauth_tokens::ActiveModel {
+            client_id: Set(client_id.to_owned()),
+            user_id: Set(user_id),
+            access_token: Set(access_token.to_owned()),
+            refresh_token: Set(refresh_token.map(|s| s.to_owned())),
+            expires_at: Set(now + expires_in_sec),
+            scopes: Set(scopes.to_owned()),
+            ..Default::default()
+        };
+        new_token.insert(&self.db).await?;
+        Ok(())
+    }
+
+    pub async fn get_oauth_token(&self, token: &str) -> Result<Option<oauth_tokens::Model>, DbErr> {
+        oauth_tokens::Entity::find()
+            .filter(
+                sea_orm::Condition::any()
+                    .add(oauth_tokens::Column::AccessToken.eq(token))
+                    .add(oauth_tokens::Column::RefreshToken.eq(token))
+            )
+            .one(&self.db)
+            .await
+    }
+
+    pub async fn delete_oauth_token(&self, token: &str) -> Result<(), DbErr> {
+        if let Some(model) = self.get_oauth_token(token).await? {
+            oauth_tokens::Entity::delete_by_id(model.id).exec(&self.db).await?;
         }
         Ok(())
     }
