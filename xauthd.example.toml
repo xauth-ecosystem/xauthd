@@ -42,3 +42,5 @@ rsa_private_key_path = "private_key.pem"
 session_ttl = 86400
 # Lifespan of an OAuth2 Authorization Code in seconds. Default: 600 (10 minutes).
 auth_code_ttl = 600
+# Lifespan of an OAuth2 Access Token in seconds. Default: 3600 (1 hour).
+access_token_ttl = 3600
