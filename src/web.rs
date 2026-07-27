@@ -126,6 +126,7 @@ struct TokenResponse {
 
 struct AppStateInner {
     db: DatabaseConnection,
+    settings: Arc<crate::config::Settings>,
     login_channels: RwLock<HashMap<String, mpsc::Receiver<String>>>,
     rsa_key: rsa::RsaPrivateKey,
 }
@@ -157,7 +158,7 @@ async fn login_post(State(state): State<AppState>, Form(f): Form<LoginForm>) -> 
     let result_data = match repo.get_user_by_name(&f.username).await {
         Ok(Some(user)) => {
             if crate::hash::verify_password(&f.password, &user.password_hash) {
-                if let Ok(session_token) = crate::jwt::generate_jwt(&user.username, "super_secret_key_change_me", 3600) {
+                if let Ok(session_token) = crate::jwt::generate_jwt(&user.username, &state.settings.jwt.secret, 3600) {
                     if let Ok(cookie_val) = format!("session_token={}; HttpOnly; Path=/; SameSite=Lax", session_token).parse() {
                         headers.insert(axum::http::header::SET_COOKIE, cookie_val);
                     }
@@ -204,7 +205,7 @@ fn get_username_from_cookie(headers: &axum::http::HeaderMap) -> String {
                 let part = part.trim();
                 if part.starts_with("session_token=") {
                     let token = &part["session_token=".len()..];
-                    if let Ok(claims) = crate::jwt::validate_jwt(token, "super_secret_key_change_me") {
+                    if let Ok(claims) = crate::jwt::validate_jwt(token, &state.settings.jwt.secret) {
                         return claims.sub;
                     }
                 }
@@ -266,7 +267,7 @@ async fn consent_post(headers: axum::http::HeaderMap, Form(f): Form<ConsentForm>
             "ccm": f.code_challenge_method,
             "n": f.nonce
         })).unwrap_or_default();
-        let code = crate::jwt::generate_jwt(&subject, "super_secret_key_change_me", 600).unwrap_or_else(|_| "fallback_code".into());
+        let code = crate::jwt::generate_jwt(&subject, &state.settings.jwt.secret, 600).unwrap_or_else(|_| "fallback_code".into());
         let url = format!("{}?code={}&state={}", f.redirect_uri, code, f.state);
         axum::response::Redirect::to(&url).into_response()
     } else {
@@ -288,7 +289,7 @@ async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>
     }
     
     let code = req.code.unwrap_or_default();
-    if let Ok(claims) = crate::jwt::validate_jwt(&code, "super_secret_key_change_me") {
+    if let Ok(claims) = crate::jwt::validate_jwt(&code, &state.settings.jwt.secret) {
         if let Ok(data) = serde_json::from_str::<serde_json::Value>(&claims.sub) {
             let u = data["u"].as_str().unwrap_or_default();
             let c = data["c"].as_str().unwrap_or_default();
@@ -325,8 +326,8 @@ async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>
                 }
                 
                 if let Ok(Some(user)) = repo.get_user_by_name(u).await {
-                    let access_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600).unwrap();
-                    let refresh_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600 * 24 * 7).unwrap();
+                    let access_token = crate::jwt::generate_jwt(u, &state.settings.jwt.secret, 3600).unwrap();
+                    let refresh_token = crate::jwt::generate_jwt(u, &state.settings.jwt.secret, 3600 * 24 * 7).unwrap();
                     let n = data["n"].as_str().unwrap_or_default();
                     let nonce_opt = if n.is_empty() { None } else { Some(n.to_string()) };
                     let id_token = crate::jwt::generate_rs256_jwt(u, &state.rsa_key, 3600, nonce_opt).unwrap();
@@ -355,7 +356,7 @@ async fn user_get(State(state): State<AppState>, headers: axum::http::HeaderMap)
         if let Ok(auth_str) = auth_header.to_str() {
             if auth_str.starts_with("Bearer ") {
                 let token = &auth_str["Bearer ".len()..];
-                if let Ok(claims) = crate::jwt::validate_jwt(token, "super_secret_key_change_me") {
+                if let Ok(claims) = crate::jwt::validate_jwt(token, &state.settings.jwt.secret) {
                     if !repo.is_token_blacklisted(&claims.jti).await.unwrap_or(false) {
                         return (axum::http::StatusCode::OK, Json(serde_json::json!({
                             "sub": claims.sub.clone(),
@@ -377,7 +378,7 @@ async fn introspect_post(State(state): State<AppState>, Form(req): Form<Introspe
         return (axum::http::StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "invalid_client"}))).into_response();
     }
 
-    if let Ok(claims) = crate::jwt::validate_jwt(&req.token, "super_secret_key_change_me") {
+    if let Ok(claims) = crate::jwt::validate_jwt(&req.token, &state.settings.jwt.secret) {
         if !repo.is_token_blacklisted(&claims.jti).await.unwrap_or(false) {
             return (axum::http::StatusCode::OK, Json(serde_json::json!({
                 "active": true,
@@ -400,7 +401,7 @@ async fn revoke_post(State(state): State<AppState>, Form(req): Form<RevokeReques
 
     repo.delete_oauth_token(&req.token).await.ok();
 
-    if let Ok(claims) = crate::jwt::validate_jwt(&req.token, "super_secret_key_change_me") {
+    if let Ok(claims) = crate::jwt::validate_jwt(&req.token, &state.settings.jwt.secret) {
         repo.blacklist_token(&claims.jti, claims.exp as i64).await.ok();
     }
     
@@ -425,10 +426,11 @@ async fn discovery_get() -> impl IntoResponse {
     }))
 }
 
-pub fn router(db: DatabaseConnection) -> Router {
-    let rsa_key = crate::jwt::get_or_create_rsa_key();
+pub fn router(db: DatabaseConnection, settings: Arc<crate::config::Settings>) -> Router {
+    let rsa_key = crate::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path);
     let state = Arc::new(AppStateInner {
         db,
+        settings,
         login_channels: RwLock::new(HashMap::new()),
         rsa_key,
     });
