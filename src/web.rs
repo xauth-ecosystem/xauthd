@@ -23,6 +23,9 @@ struct LoginTemplate {
     client_id: String,
     redirect_uri: String,
     state: String,
+    code_challenge: String,
+    code_challenge_method: String,
+    nonce: String,
 }
 
 #[derive(Template)]
@@ -33,6 +36,9 @@ struct ConsentTemplate {
     state: String,
     username: String,
     scopes_list: String,
+    code_challenge: String,
+    code_challenge_method: String,
+    nonce: String,
 }
 
 #[derive(Deserialize)]
@@ -41,6 +47,9 @@ struct LoginQuery {
     redirect_uri: Option<String>,
     state: Option<String>,
     error: Option<String>,
+    code_challenge: Option<String>,
+    code_challenge_method: Option<String>,
+    nonce: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -50,6 +59,9 @@ struct LoginForm {
     client_id: Option<String>,
     redirect_uri: Option<String>,
     state: Option<String>,
+    code_challenge: Option<String>,
+    code_challenge_method: Option<String>,
+    nonce: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -58,6 +70,9 @@ struct ConsentForm {
     client_id: String,
     redirect_uri: String,
     state: String,
+    code_challenge: Option<String>,
+    code_challenge_method: Option<String>,
+    nonce: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -83,6 +98,7 @@ struct TokenRequest {
     redirect_uri: Option<String>,
     client_id: String,
     client_secret: String,
+    code_verifier: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -107,6 +123,9 @@ async fn authorize_get(Query(q): Query<LoginQuery>) -> impl IntoResponse {
         client_id: q.client_id.unwrap_or_default(),
         redirect_uri: q.redirect_uri.unwrap_or_default(),
         state: q.state.unwrap_or_default(),
+        code_challenge: q.code_challenge.unwrap_or_default(),
+        code_challenge_method: q.code_challenge_method.unwrap_or_default(),
+        nonce: q.nonce.unwrap_or_default(),
     };
     Html(template.render().unwrap())
 }
@@ -134,6 +153,15 @@ async fn login_post(State(state): State<AppState>, Form(f): Form<LoginForm>) -> 
                 }
                 if let Some(s) = f.state {
                     url.push_str(&format!("&state={}", s));
+                }
+                if let Some(cc) = f.code_challenge {
+                    url.push_str(&format!("&code_challenge={}", cc));
+                }
+                if let Some(ccm) = f.code_challenge_method {
+                    url.push_str(&format!("&code_challenge_method={}", ccm));
+                }
+                if let Some(n) = f.nonce {
+                    url.push_str(&format!("&nonce={}", n));
                 }
                 serde_json::to_string(&LoginEventData { redirect_url: Some(url) }).unwrap()
             } else {
@@ -194,6 +222,9 @@ async fn consent_get(headers: axum::http::HeaderMap, Query(q): Query<LoginQuery>
         state: q.state.unwrap_or_default(),
         username,
         scopes_list: "profile".to_string(),
+        code_challenge: q.code_challenge.unwrap_or_default(),
+        code_challenge_method: q.code_challenge_method.unwrap_or_default(),
+        nonce: q.nonce.unwrap_or_default(),
     };
     Html(template.render().unwrap())
 }
@@ -204,7 +235,10 @@ async fn consent_post(headers: axum::http::HeaderMap, Form(f): Form<ConsentForm>
         let subject = serde_json::to_string(&serde_json::json!({
             "u": username,
             "c": f.client_id,
-            "r": f.redirect_uri
+            "r": f.redirect_uri,
+            "cc": f.code_challenge,
+            "ccm": f.code_challenge_method,
+            "n": f.nonce
         })).unwrap_or_default();
         let code = crate::jwt::generate_jwt(&subject, "super_secret_key_change_me", 600).unwrap_or_else(|_| "fallback_code".into());
         let url = format!("{}?code={}&state={}", f.redirect_uri, code, f.state);
@@ -234,8 +268,36 @@ async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>
             let c = data["c"].as_str().unwrap_or_default();
             let r = data["r"].as_str().unwrap_or_default();
             
+            let cc = data["cc"].as_str().unwrap_or_default();
+            let ccm = data["ccm"].as_str().unwrap_or_default();
             let req_redirect_uri = req.redirect_uri.unwrap_or_default();
+            
             if c == req.client_id && r == req_redirect_uri {
+                if !cc.is_empty() {
+                    let code_verifier = req.code_verifier.unwrap_or_default();
+                    if code_verifier.is_empty() {
+                        return (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "invalid_request", "error_description": "code_verifier required"}))).into_response();
+                    }
+                    
+                    let is_valid = if ccm == "S256" {
+                        use sha2::{Sha256, Digest};
+                        use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+                        let mut hasher = Sha256::new();
+                        hasher.update(code_verifier.as_bytes());
+                        let hash = hasher.finalize();
+                        let expected = URL_SAFE_NO_PAD.encode(hash);
+                        expected == cc
+                    } else if ccm == "plain" || ccm == "plain_text" || ccm.is_empty() {
+                        code_verifier == cc
+                    } else {
+                        false
+                    };
+                    
+                    if !is_valid {
+                        return (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "invalid_grant", "error_description": "Invalid code_verifier"}))).into_response();
+                    }
+                }
+                
                 let access_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600).unwrap();
                 let refresh_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600 * 24 * 7).unwrap();
                 let id_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600).unwrap();
