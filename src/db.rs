@@ -10,6 +10,7 @@ pub struct Model {
     pub username: String,
     pub password_hash: String,
     pub last_ip: Option<String>,
+    pub last_login: Option<i64>,
     pub failed_attempts: i32,
     pub is_banned: bool,
     pub must_change_password: bool,
@@ -54,9 +55,11 @@ impl UserRepository {
     }
 
     pub async fn update_last_login(&self, user_id: i64, ip: &str) -> Result<(), DbErr> {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
         let update = ActiveModel {
             id: Set(user_id),
             last_ip: Set(Some(ip.to_owned())),
+            last_login: Set(Some(now)),
             ..Default::default()
         };
         update.update(&self.db).await?;
