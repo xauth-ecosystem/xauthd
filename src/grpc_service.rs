@@ -136,8 +136,30 @@ impl AuthService for XAuthCoreService {
         }))
     }
 
-    async fn generate_o_auth_token(&self, _: Request<OAuthTokenRequest>) -> Result<Response<OAuthTokenResponse>, Status> {
-        Err(Status::unimplemented("Not implemented yet"))
+    async fn generate_o_auth_token(&self, request: Request<OAuthTokenRequest>) -> Result<Response<OAuthTokenResponse>, Status> {
+        let req = request.into_inner();
+        
+        // TODO: Validate req.client_id, req.client_secret and req.code
+        // TODO: Generate actual JWT access_token and refresh_token
+        let is_valid = req.client_id == "my-client-id"; // Mock validation
+        
+        if is_valid {
+            Ok(Response::new(OAuthTokenResponse {
+                success: true,
+                access_token: "dummy_access_token".into(),
+                refresh_token: "dummy_refresh_token".into(),
+                expires_in: 3600,
+                error: "".into(),
+            }))
+        } else {
+            Ok(Response::new(OAuthTokenResponse {
+                success: false,
+                access_token: "".into(),
+                refresh_token: "".into(),
+                expires_in: 0,
+                error: "invalid_client".into(),
+            }))
+        }
     }
 
     async fn revoke_o_auth_token(&self, _: Request<OAuthRevokeRequest>) -> Result<Response<OAuthRevokeResponse>, Status> {
