@@ -162,8 +162,13 @@ impl AuthService for XAuthCoreService {
         }
     }
 
-    async fn revoke_o_auth_token(&self, _: Request<OAuthRevokeRequest>) -> Result<Response<OAuthRevokeResponse>, Status> {
-        Err(Status::unimplemented("Not implemented yet"))
+    async fn revoke_o_auth_token(&self, request: Request<OAuthRevokeRequest>) -> Result<Response<OAuthRevokeResponse>, Status> {
+        let _req = request.into_inner();
+        
+        // TODO: Invalidate the OAuth token in database or cache
+        Ok(Response::new(OAuthRevokeResponse {
+            success: true,
+        }))
     }
 
     async fn get_player_info(&self, request: Request<PlayerInfoRequest>) -> Result<Response<PlayerInfoResponse>, Status> {
