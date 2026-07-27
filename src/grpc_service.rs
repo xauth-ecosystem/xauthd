@@ -184,33 +184,56 @@ impl AuthService for XAuthCoreService {
         let req = request.into_inner();
         let repo = UserRepository::new(self.db.clone());
         
-        let is_valid = repo.validate_oauth_client(&req.client_id, &req.client_secret).await.unwrap_or(false);
-        
-        if is_valid {
-            let access_token = crate::jwt::generate_jwt("oauth_user", "super_secret_key_change_me", 3600).unwrap_or_else(|_| "".into());
-            let refresh_token = crate::jwt::generate_jwt("oauth_user", "super_secret_key_change_me", 3600 * 24 * 7).unwrap_or_else(|_| "".into());
-
-            Ok(Response::new(OAuthTokenResponse {
-                success: true,
-                access_token,
-                refresh_token,
-                expires_in: 3600,
-                error: "".into(),
-            }))
-        } else {
-            Ok(Response::new(OAuthTokenResponse {
+        if !repo.validate_oauth_client(&req.client_id, &req.client_secret).await.unwrap_or(false) {
+            return Ok(Response::new(OAuthTokenResponse {
                 success: false,
                 access_token: "".into(),
                 refresh_token: "".into(),
                 expires_in: 0,
                 error: "invalid_client".into(),
-            }))
+            }));
         }
+
+        if let Ok(claims) = crate::jwt::validate_jwt(&req.code, "super_secret_key_change_me") {
+            if let Ok(data) = serde_json::from_str::<serde_json::Value>(&claims.sub) {
+                let u = data["u"].as_str().unwrap_or_default();
+                let c = data["c"].as_str().unwrap_or_default();
+                let r = data["r"].as_str().unwrap_or_default();
+                
+                if c == req.client_id && r == req.redirect_uri {
+                    if let Ok(Some(user)) = repo.get_user_by_name(u).await {
+                        let access_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600).unwrap_or_default();
+                        let refresh_token = crate::jwt::generate_jwt(u, "super_secret_key_change_me", 3600 * 24 * 7).unwrap_or_default();
+                        let scopes = "openid profile";
+
+                        repo.create_oauth_token(&req.client_id, user.id, &access_token, Some(&refresh_token), 3600, scopes).await.ok();
+
+                        return Ok(Response::new(OAuthTokenResponse {
+                            success: true,
+                            access_token,
+                            refresh_token,
+                            expires_in: 3600,
+                            error: "".into(),
+                        }));
+                    }
+                }
+            }
+        }
+
+        Ok(Response::new(OAuthTokenResponse {
+            success: false,
+            access_token: "".into(),
+            refresh_token: "".into(),
+            expires_in: 0,
+            error: "invalid_grant".into(),
+        }))
     }
 
     async fn revoke_o_auth_token(&self, request: Request<OAuthRevokeRequest>) -> Result<Response<OAuthRevokeResponse>, Status> {
         let req = request.into_inner();
         let repo = UserRepository::new(self.db.clone());
+        
+        repo.delete_oauth_token(&req.token).await.ok();
         
         if let Ok(claims) = crate::jwt::validate_jwt(&req.token, "super_secret_key_change_me") {
             repo.blacklist_token(&claims.jti, claims.exp as i64).await.ok();
