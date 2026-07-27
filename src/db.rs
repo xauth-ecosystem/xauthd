@@ -21,6 +21,25 @@ pub enum Relation {}
 
 impl ActiveModelBehavior for ActiveModel {}
 
+pub mod token_blacklist {
+    use sea_orm::entity::prelude::*;
+
+    #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+    #[sea_orm(table_name = "token_blacklist")]
+    pub struct Model {
+        #[sea_orm(primary_key)]
+        pub id: i64,
+        #[sea_orm(unique)]
+        pub token: String,
+        pub expires_at: i64,
+    }
+
+    #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+    pub enum Relation {}
+
+    impl ActiveModelBehavior for ActiveModel {}
+}
+
 pub struct UserRepository {
     db: DatabaseConnection,
 }
@@ -83,5 +102,23 @@ impl UserRepository {
         };
         update.update(&self.db).await?;
         Ok(())
+    }
+
+    pub async fn blacklist_token(&self, token_jti: &str, expires_at: i64) -> Result<(), DbErr> {
+        let new_blacklisted = token_blacklist::ActiveModel {
+            token: Set(token_jti.to_owned()),
+            expires_at: Set(expires_at),
+            ..Default::default()
+        };
+        new_blacklisted.insert(&self.db).await.ok();
+        Ok(())
+    }
+
+    pub async fn is_token_blacklisted(&self, token_jti: &str) -> Result<bool, DbErr> {
+        let blacklisted = token_blacklist::Entity::find()
+            .filter(token_blacklist::Column::Token.eq(token_jti))
+            .one(&self.db)
+            .await?;
+        Ok(blacklisted.is_some())
     }
 }
