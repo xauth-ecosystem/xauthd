@@ -158,7 +158,7 @@ async fn login_post(State(state): State<AppState>, Form(f): Form<LoginForm>) -> 
     let result_data = match repo.get_user_by_name(&f.username).await {
         Ok(Some(user)) => {
             if crate::hash::verify_password(&f.password, &user.password_hash) {
-                if let Ok(session_token) = crate::jwt::generate_jwt(&user.username, &state.settings.jwt.secret, 3600) {
+                if let Ok(session_token) = crate::jwt::generate_jwt(&user.username, &state.settings.jwt.secret, state.settings.jwt.session_ttl) {
                     if let Ok(cookie_val) = format!("session_token={}; HttpOnly; Path=/; SameSite=Lax", session_token).parse() {
                         headers.insert(axum::http::header::SET_COOKIE, cookie_val);
                     }
