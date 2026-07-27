@@ -212,6 +212,7 @@ async fn consent_post(headers: axum::http::HeaderMap, Form(f): Form<ConsentForm>
 }
 
 async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>) -> impl IntoResponse {
+    tracing::info!("Token request for client '{}' with redirect_uri '{:?}'", req.client_id, req.redirect_uri);
     let repo = UserRepository::new(state.db.clone());
     let is_valid = repo.validate_oauth_client(&req.client_id, &req.client_secret).await.unwrap_or(false);
     
