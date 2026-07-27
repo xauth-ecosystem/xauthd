@@ -42,10 +42,17 @@ pub struct PasswordHashingSettings {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct JwtSettings {
+    pub secret: String,
+    pub rsa_private_key_path: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct Settings {
     pub database: DatabaseSettings,
     pub network: NetworkSettings,
     pub password_hashing: PasswordHashingSettings,
+    pub jwt: JwtSettings,
 }
 
 impl Settings {
