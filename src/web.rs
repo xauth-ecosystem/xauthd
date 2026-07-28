@@ -9,9 +9,13 @@ use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-fn render_template(name: &str, ctx: minijinja::Value) -> Result<Html<String>, String> {
+fn render_template(
+    templates_dir: &str,
+    name: &str,
+    ctx: minijinja::Value,
+) -> Result<Html<String>, String> {
     let mut env = minijinja::Environment::new();
-    env.set_loader(minijinja::path_loader("templates"));
+    env.set_loader(minijinja::path_loader(templates_dir));
     let tmpl = env.get_template(name).map_err(|e| e.to_string())?;
     let rendered = tmpl.render(ctx).map_err(|e| e.to_string())?;
     Ok(Html(rendered))
@@ -94,11 +98,15 @@ struct AppStateInner {
     db: DatabaseConnection,
     settings: Arc<crate::config::Settings>,
     rsa_key: rsa::RsaPrivateKey,
+    templates_dir: String,
 }
 
 type AppState = Arc<AppStateInner>;
 
-async fn authorize_get(Query(q): Query<LoginQuery>) -> impl IntoResponse {
+async fn authorize_get(
+    State(state): State<AppState>,
+    Query(q): Query<LoginQuery>,
+) -> impl IntoResponse {
     let ctx = minijinja::context! {
         error => q.error,
         client_id => q.client_id.unwrap_or_default(),
@@ -109,7 +117,7 @@ async fn authorize_get(Query(q): Query<LoginQuery>) -> impl IntoResponse {
         nonce => q.nonce.unwrap_or_default(),
     };
 
-    match render_template("login.html", ctx) {
+    match render_template(&state.templates_dir, "login.html", ctx) {
         Ok(html) => html.into_response(),
         Err(e) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
     }
@@ -251,7 +259,7 @@ async fn consent_get(
         nonce => q.nonce.unwrap_or_default(),
     };
 
-    match render_template("consent.html", ctx) {
+    match render_template(&state.templates_dir, "consent.html", ctx) {
         Ok(html) => html.into_response(),
         Err(e) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
     }
@@ -535,14 +543,19 @@ async fn discovery_get() -> impl IntoResponse {
 
 pub fn router(db: DatabaseConnection, settings: Arc<crate::config::Settings>) -> Router {
     // Check if templates directory exists
-    let templates_path = std::path::Path::new("templates");
+    let templates_dir = &settings.web.templates_dir;
+    let templates_path = std::path::Path::new(templates_dir);
     if !templates_path.exists() || !templates_path.is_dir() {
-        panic!("FATAL: 'templates' directory not found. Please create it alongside the binary.");
+        panic!(
+            "FATAL: templates directory '{}' not found. Check web.templates_dir in xauthd.toml.",
+            templates_dir
+        );
     }
 
     let rsa_key = crate::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path);
     let state = Arc::new(AppStateInner {
         db,
+        templates_dir: settings.web.templates_dir.clone(),
         settings,
         rsa_key,
     });
