@@ -550,6 +550,10 @@ mod tests {
                 login_chain: vec!["password".into(), "totp".into()],
                 max_attempts_per_step: 3,
             },
+            web: WebSettings {
+                templates_dir: "./templates".into(),
+                public_dir: None,
+            },
         })
     }
 
