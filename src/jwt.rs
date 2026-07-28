@@ -54,8 +54,10 @@ pub fn generate_flow_token(
 }
 
 pub fn validate_flow_token(token: &str, secret: &str) -> Result<FlowClaims, Error> {
-    let mut validation = Validation::default();
-    validation.leeway = 60;
+    let validation = Validation {
+        leeway: 60,
+        ..Default::default()
+    };
 
     let token_data = decode::<FlowClaims>(
         token,
@@ -169,8 +171,10 @@ pub fn generate_rs256_jwt(
 }
 
 pub fn validate_jwt(token: &str, secret: &str) -> Result<Claims, Error> {
-    let mut validation = Validation::default();
-    validation.leeway = 60; // 1 minute leeway for clock skew
+    let validation = Validation {
+        leeway: 60,
+        ..Default::default()
+    };
 
     let token_data = decode::<Claims>(
         token,
