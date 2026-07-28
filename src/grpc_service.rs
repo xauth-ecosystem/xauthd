@@ -116,7 +116,13 @@ impl AuthService for XAuthCoreService {
                         Ok(Some(u)) => u,
                         _ => return Err(Status::unauthenticated("User not found")),
                     };
+                    
+                    if user.failed_attempts >= 5 {
+                        return Err(Status::permission_denied("Too many failed attempts. Account locked."));
+                    }
+                    
                     if crate::hash::verify_password(&req.input_data, &user.password_hash) {
+                        repo.reset_failed_attempts(user.id).await.ok();
                         success = true;
                         step_completed = true;
                     } else {
