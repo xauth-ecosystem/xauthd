@@ -13,6 +13,42 @@ pub struct Claims {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub nonce: Option<String>,
 }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FlowClaims {
+    pub sub: String,
+    pub chain: String,
+    pub step_index: usize,
+    pub exp: usize,
+}
+
+pub fn generate_flow_token(username: &str, chain: &str, step_index: usize, secret: &str, expiration_seconds: usize) -> Result<String, Error> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as usize;
+        
+    let claims = FlowClaims {
+        sub: username.to_owned(),
+        chain: chain.to_owned(),
+        step_index,
+        exp: now + expiration_seconds,
+    };
+    
+    encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_ref()))
+}
+
+pub fn validate_flow_token(token: &str, secret: &str) -> Result<FlowClaims, Error> {
+    let mut validation = Validation::default();
+    validation.leeway = 60;
+    
+    let token_data = decode::<FlowClaims>(
+        token,
+        &DecodingKey::from_secret(secret.as_ref()),
+        &validation,
+    )?;
+    
+    Ok(token_data.claims)
+}
 
 pub fn get_or_create_rsa_key(path: &str) -> RsaPrivateKey {
     if let Ok(pem) = fs::read_to_string(path) {
