@@ -22,7 +22,7 @@ unzip -o "protoc-${PB_VER}-linux-x86_64.zip" -d /tmp/protoc
 sudo cp /tmp/protoc/bin/protoc /usr/local/bin/
 ```
 
-Verify: `protoc --version`
+To verify the installation, run `protoc --version`.
 
 ### PHP gRPC runtime extensions
 
@@ -119,7 +119,7 @@ sudo cp grpc_php_plugin /usr/local/bin/
 > [!NOTE]
 > The `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` flag is required on systems with CMake ≥ 3.31.
 
-Verify: `which grpc_php_plugin`
+To verify the installation, run `which grpc_php_plugin`.
 
 #### Generate code
 
