@@ -51,6 +51,9 @@ refresh_token_ttl = 604800
 # Maximum allowed failed password attempts across all interfaces (Game and Web).
 # Upon reaching this limit, the account is locked and cannot authenticate until reset.
 max_failed_attempts = 5
+# Time (in seconds) after which the failed attempts counter resets automatically.
+# Default: 900 (15 minutes).
+failed_attempts_reset_interval = 900
 
 [auth_flow]
 # Order of authentication steps for players who are not registered yet
