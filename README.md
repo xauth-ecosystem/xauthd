@@ -25,7 +25,7 @@ Configure your database connection, password hashing algorithm, and `[auth_flow]
 
 To compile and run the development build:
 ```bash
-cargo run
+cargo run -- start
 ```
 
 To build the optimized release version for production:
