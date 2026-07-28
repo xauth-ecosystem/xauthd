@@ -1,0 +1,15 @@
+[Unit]
+Description=XAuth Core Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=root
+# Adjust the path to match where you placed xauth-core
+WorkingDirectory=/opt/xauthd
+ExecStart=/opt/xauthd/xauth-core start
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
