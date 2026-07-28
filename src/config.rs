@@ -52,6 +52,11 @@ pub struct JwtSettings {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct SecuritySettings {
+    pub max_failed_attempts: i32,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct AuthFlowSettings {
     pub register_chain: Vec<String>,
     pub login_chain: Vec<String>,
@@ -64,6 +69,7 @@ pub struct Settings {
     pub network: NetworkSettings,
     pub password_hashing: PasswordHashingSettings,
     pub jwt: JwtSettings,
+    pub security: SecuritySettings,
     pub auth_flow: AuthFlowSettings,
 }
 
