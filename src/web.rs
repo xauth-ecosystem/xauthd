@@ -135,7 +135,7 @@ async fn login_post(State(state): State<AppState>, Form(f): Form<LoginForm>) -> 
     
     match repo.get_user_by_name(&f.username).await {
         Ok(Some(user)) => {
-            if user.failed_attempts >= 5 {
+            if user.failed_attempts >= state.settings.security.max_failed_attempts {
                 return (headers, Json(LoginResponse {
                     redirect_url: None,
                     error: Some("Too many failed attempts. Account locked.".to_string()),
