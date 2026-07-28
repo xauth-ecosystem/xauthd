@@ -1,5 +1,4 @@
 use crate::db::UserRepository;
-use askama::Template;
 use axum::{
     extract::{Form, Query, State},
     response::{Html, IntoResponse},
@@ -10,29 +9,12 @@ use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-#[derive(Template)]
-#[template(path = "login.html")]
-struct LoginTemplate {
-    error: Option<String>,
-    client_id: String,
-    redirect_uri: String,
-    state: String,
-    code_challenge: String,
-    code_challenge_method: String,
-    nonce: String,
-}
-
-#[derive(Template)]
-#[template(path = "consent.html")]
-struct ConsentTemplate {
-    client_id: String,
-    redirect_uri: String,
-    state: String,
-    username: String,
-    scopes_list: String,
-    code_challenge: String,
-    code_challenge_method: String,
-    nonce: String,
+fn render_template(name: &str, ctx: minijinja::Value) -> Result<Html<String>, String> {
+    let mut env = minijinja::Environment::new();
+    env.set_loader(minijinja::path_loader("templates"));
+    let tmpl = env.get_template(name).map_err(|e| e.to_string())?;
+    let rendered = tmpl.render(ctx).map_err(|e| e.to_string())?;
+    Ok(Html(rendered))
 }
 
 #[derive(Deserialize)]
@@ -117,16 +99,20 @@ struct AppStateInner {
 type AppState = Arc<AppStateInner>;
 
 async fn authorize_get(Query(q): Query<LoginQuery>) -> impl IntoResponse {
-    let template = LoginTemplate {
-        error: q.error,
-        client_id: q.client_id.unwrap_or_default(),
-        redirect_uri: q.redirect_uri.unwrap_or_default(),
-        state: q.state.unwrap_or_default(),
-        code_challenge: q.code_challenge.unwrap_or_default(),
-        code_challenge_method: q.code_challenge_method.unwrap_or_default(),
-        nonce: q.nonce.unwrap_or_default(),
+    let ctx = minijinja::context! {
+        error => q.error,
+        client_id => q.client_id.unwrap_or_default(),
+        redirect_uri => q.redirect_uri.unwrap_or_default(),
+        state => q.state.unwrap_or_default(),
+        code_challenge => q.code_challenge.unwrap_or_default(),
+        code_challenge_method => q.code_challenge_method.unwrap_or_default(),
+        nonce => q.nonce.unwrap_or_default(),
     };
-    Html(template.render().unwrap())
+
+    match render_template("login.html", ctx) {
+        Ok(html) => html.into_response(),
+        Err(e) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
+    }
 }
 
 async fn login_post(State(state): State<AppState>, Form(f): Form<LoginForm>) -> impl IntoResponse {
@@ -254,17 +240,21 @@ async fn consent_get(
         }
     }
 
-    let template = ConsentTemplate {
-        client_id: q.client_id.unwrap_or_default(),
-        redirect_uri: q.redirect_uri.unwrap_or_default(),
-        state: q.state.unwrap_or_default(),
-        username,
-        scopes_list: allowed_scopes,
-        code_challenge: q.code_challenge.unwrap_or_default(),
-        code_challenge_method: q.code_challenge_method.unwrap_or_default(),
-        nonce: q.nonce.unwrap_or_default(),
+    let ctx = minijinja::context! {
+        client_id => q.client_id.unwrap_or_default(),
+        redirect_uri => q.redirect_uri.unwrap_or_default(),
+        state => q.state.unwrap_or_default(),
+        username => username,
+        scopes_list => allowed_scopes,
+        code_challenge => q.code_challenge.unwrap_or_default(),
+        code_challenge_method => q.code_challenge_method.unwrap_or_default(),
+        nonce => q.nonce.unwrap_or_default(),
     };
-    Html(template.render().unwrap())
+
+    match render_template("consent.html", ctx) {
+        Ok(html) => html.into_response(),
+        Err(e) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
+    }
 }
 
 async fn consent_post(
@@ -544,6 +534,12 @@ async fn discovery_get() -> impl IntoResponse {
 }
 
 pub fn router(db: DatabaseConnection, settings: Arc<crate::config::Settings>) -> Router {
+    // Check if templates directory exists
+    let templates_path = std::path::Path::new("templates");
+    if !templates_path.exists() || !templates_path.is_dir() {
+        panic!("FATAL: 'templates' directory not found. Please create it alongside the binary.");
+    }
+
     let rsa_key = crate::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path);
     let state = Arc::new(AppStateInner {
         db,
