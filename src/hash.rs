@@ -62,7 +62,9 @@ pub fn verify_password(password: &str, expected_hash: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Argon2idSettings, BcryptSettings, PasswordHashingOptions, PasswordHashingSettings};
+    use crate::config::{
+        Argon2idSettings, BcryptSettings, PasswordHashingOptions, PasswordHashingSettings,
+    };
 
     fn get_bcrypt_settings() -> PasswordHashingSettings {
         PasswordHashingSettings {
