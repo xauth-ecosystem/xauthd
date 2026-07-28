@@ -413,8 +413,17 @@ mod tests {
         let builder = db.get_database_backend();
         let schema = Schema::new(builder);
 
-        let stmt = schema.create_table_from_entity(oauth_clients::Entity);
-        db.execute(builder.build(&stmt)).await.unwrap();
+        let stmts = vec![
+            schema.create_table_from_entity(crate::db::Entity),
+            schema.create_table_from_entity(token_blacklist::Entity),
+            schema.create_table_from_entity(oauth_clients::Entity),
+            schema.create_table_from_entity(sessions::Entity),
+            schema.create_table_from_entity(oauth_tokens::Entity),
+        ];
+
+        for stmt in stmts {
+            db.execute(builder.build(&stmt)).await.unwrap();
+        }
 
         db
     }
