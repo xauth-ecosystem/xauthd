@@ -107,6 +107,10 @@ login_chain = ["password", "totp"]
 
 The `xauthd` core natively handles security-critical steps (`password`, `register`, `totp`). Any custom steps, such as `captcha` or `send_gift`, are automatically delegated to your PocketMine plugin. The plugin must execute the step on the client side and return a `{step_name}_complete` gRPC signal to allow the player to proceed.
 
+## Client Libraries
+
+To connect your PocketMine-MP (PHP) or Nukkit/Spigot/Paper (Java) plugin to `xauthd`, generate gRPC client stubs from `proto/xauth.proto`. See [docs/code-generation.md](docs/code-generation.md) for setup instructions.
+
 ## Contributing
 
 Contributions are welcome and appreciated! Here's how you can contribute:
