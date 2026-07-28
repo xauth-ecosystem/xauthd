@@ -20,43 +20,124 @@ use crate::xauth_v1::auth_service_server::AuthServiceServer;
 use crate::migrator::Migrator;
 use sea_orm_migration::MigratorTrait;
 
+use clap::{Parser, Subcommand};
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Starts the XAuth Core Daemon (gRPC and Web servers)
+    Start,
+    /// Manually applies database migrations
+    Migrate,
+    /// Checks the xauthd.toml configuration for errors
+    ConfigCheck,
+    /// Administrative commands
+    Admin {
+        #[command(subcommand)]
+        admin_cmd: AdminCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum AdminCommands {
+    /// Resets a player's password
+    ResetPassword {
+        username: String,
+        new_password: String,
+    },
+    /// Unbans a player
+    Unban {
+        username: String,
+    },
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
-    info!("Starting XAuth Core Daemon...");
-
-    // Load configuration (xauthd.toml)
-    let settings = config::Settings::new().unwrap_or_else(|err| {
-        tracing::error!("Failed to load configuration: {}. Please check your xauthd.toml.", err);
-        std::process::exit(1);
-    });
-
-    // Connect to Postgres, MySQL or SQLite using SeaORM
-    let db = Database::connect(&settings.database.url).await?;
-
-    info!("Applying database migrations...");
-    Migrator::up(&db, None).await?;
-    info!("Migrations applied successfully.");
-
-    let core_service = XAuthCoreService::new(db.clone(), std::sync::Arc::new(settings.clone()));
-
-    let addr: SocketAddr = settings.network.grpc_address.parse()?;
     
-    info!("XAuth Core gRPC listening on {}", addr);
+    let cli = Cli::parse();
 
-    let grpc_server = Server::builder()
-        .add_service(AuthServiceServer::new(core_service))
-        .serve(addr);
-        
-    let web_app = crate::web::router(db.clone(), std::sync::Arc::new(settings.clone()));
-    let web_listener = tokio::net::TcpListener::bind(&settings.network.web_address).await?;
-    info!("XAuth Web Dashboard listening on {}", settings.network.web_address);
-    
-    let web_server = axum::serve(web_listener, web_app);
-    
-    let (grpc_res, web_res) = tokio::join!(grpc_server, web_server);
-    grpc_res?;
-    web_res.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+    match &cli.command {
+        Commands::Start => {
+            info!("Starting XAuth Core Daemon...");
+
+            let settings = config::Settings::new().unwrap_or_else(|err| {
+                tracing::error!("Failed to load configuration: {}. Please check your xauthd.toml.", err);
+                std::process::exit(1);
+            });
+
+            let db = Database::connect(&settings.database.url).await?;
+
+            info!("Applying database migrations...");
+            Migrator::up(&db, None).await?;
+            info!("Migrations applied successfully.");
+
+            let core_service = XAuthCoreService::new(db.clone(), std::sync::Arc::new(settings.clone()));
+
+            let addr: SocketAddr = settings.network.grpc_address.parse()?;
+            
+            info!("XAuth Core gRPC listening on {}", addr);
+
+            let grpc_server = Server::builder()
+                .add_service(AuthServiceServer::new(core_service))
+                .serve(addr);
+                
+            let web_app = crate::web::router(db.clone(), std::sync::Arc::new(settings.clone()));
+            let web_listener = tokio::net::TcpListener::bind(&settings.network.web_address).await?;
+            info!("XAuth Web Dashboard listening on {}", settings.network.web_address);
+            
+            let web_server = axum::serve(web_listener, web_app);
+            
+            let (grpc_res, web_res) = tokio::join!(grpc_server, web_server);
+            grpc_res?;
+            web_res.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        }
+        Commands::Migrate => {
+            let settings = config::Settings::new()?;
+            let db = Database::connect(&settings.database.url).await?;
+            info!("Applying database migrations...");
+            Migrator::up(&db, None).await?;
+            info!("Migrations applied successfully.");
+        }
+        Commands::ConfigCheck => {
+            match config::Settings::new() {
+                Ok(_) => info!("Configuration syntax is valid."),
+                Err(e) => tracing::error!("Configuration error: {}", e),
+            }
+        }
+        Commands::Admin { admin_cmd } => {
+            let settings = config::Settings::new()?;
+            let db = Database::connect(&settings.database.url).await?;
+            let repo = crate::db::UserRepository::new(db);
+            
+            match admin_cmd {
+                AdminCommands::ResetPassword { username, new_password } => {
+                    if let Some(user) = repo.get_user_by_name(username).await? {
+                        let hash = crate::hash::hash_password(new_password, &settings.password_hashing).unwrap();
+                        repo.update_password(user.id, &hash).await?;
+                        info!("Password reset successfully for user '{}'.", username);
+                    } else {
+                        tracing::error!("User '{}' not found.", username);
+                    }
+                }
+                AdminCommands::Unban { username } => {
+                    if let Some(user) = repo.get_user_by_name(username).await? {
+                        repo.set_banned(user.id, false).await?;
+                        repo.reset_failed_attempts(user.id).await?;
+                        info!("User '{}' has been unbanned.", username);
+                    } else {
+                        tracing::error!("User '{}' not found.", username);
+                    }
+                }
+            }
+        }
+    }
 
     Ok(())
 }
