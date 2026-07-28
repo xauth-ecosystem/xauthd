@@ -171,12 +171,12 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 }
                 AdminCommands::CreateOauthClient { name, redirect_uri } => {
                     use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-                    use rand::RngCore;
+                    use rand_core::{RngCore, OsRng};
                     
                     let mut id_bytes = [0u8; 16];
                     let mut secret_bytes = [0u8; 32];
-                    rand::thread_rng().fill_bytes(&mut id_bytes);
-                    rand::thread_rng().fill_bytes(&mut secret_bytes);
+                    OsRng.fill_bytes(&mut id_bytes);
+                    OsRng.fill_bytes(&mut secret_bytes);
                     
                     let client_id = URL_SAFE_NO_PAD.encode(&id_bytes);
                     let client_secret = URL_SAFE_NO_PAD.encode(&secret_bytes);
