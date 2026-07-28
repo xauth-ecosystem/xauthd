@@ -58,6 +58,13 @@ enum AdminCommands {
     Unban {
         username: String,
     },
+    /// Creates a new OAuth2 Client
+    CreateOauthClient {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        redirect_uri: String,
+    },
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -161,6 +168,26 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                     } else {
                         tracing::error!("User '{}' not found.", username);
                     }
+                }
+                AdminCommands::CreateOauthClient { name, redirect_uri } => {
+                    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+                    use rand::RngCore;
+                    
+                    let mut id_bytes = [0u8; 16];
+                    let mut secret_bytes = [0u8; 32];
+                    rand::thread_rng().fill_bytes(&mut id_bytes);
+                    rand::thread_rng().fill_bytes(&mut secret_bytes);
+                    
+                    let client_id = URL_SAFE_NO_PAD.encode(&id_bytes);
+                    let client_secret = URL_SAFE_NO_PAD.encode(&secret_bytes);
+                    
+                    repo.create_oauth_client(&client_id, &client_secret, redirect_uri).await?;
+                    
+                    println!("OAuth2 Client '{}' created successfully!", name);
+                    println!("Client ID: {}", client_id);
+                    println!("Client Secret: {}", client_secret);
+                    println!("Redirect URI: {}", redirect_uri);
+                    println!("Keep the Client Secret safe. It cannot be recovered.");
                 }
             }
         }
