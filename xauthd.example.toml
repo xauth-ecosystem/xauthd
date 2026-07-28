@@ -20,6 +20,10 @@ web_address = "0.0.0.0:8080"
 # Server owners can freely edit these files to customize the look and feel.
 # Changes are picked up on the next page load — no restart required.
 templates_dir = "./templates"
+# Path to the directory for static assets (CSS, JS, images, fonts).
+# Files from this directory are served under the /static/ URL prefix.
+# Leave empty or remove if you prefer to use CDN links in your templates.
+public_dir = "./public"
 
 [password_hashing]
 # Available algorithms: BCRYPT, ARGON2ID
