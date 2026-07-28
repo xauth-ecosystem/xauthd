@@ -83,6 +83,7 @@ impl AuthService for XAuthCoreService {
                             message: "User not found.".into(),
                             next_action: "require_register".into(),
                             session_token: "".into(),
+                            flow_token: "".into(),
                         }));
                     },
                     Err(_) => return Err(Status::internal("Database error")),
@@ -99,6 +100,7 @@ impl AuthService for XAuthCoreService {
                             message: "Enter 2FA code from Telegram (/confirm <code>).".into(),
                             next_action: "require_2fa".into(),
                             session_token: "".into(),
+                            flow_token: "".into(),
                         }))
                     } else {
                         let token = crate::jwt::generate_jwt(&user.username, &self.settings.jwt.secret, self.settings.jwt.session_ttl).unwrap_or_else(|_| "".into());
@@ -110,6 +112,7 @@ impl AuthService for XAuthCoreService {
                             message: "Successfully authenticated!".into(),
                             next_action: "authenticated".into(),
                             session_token: token,
+                            flow_token: "".into(),
                         }))
                     }
                 } else {
@@ -119,6 +122,7 @@ impl AuthService for XAuthCoreService {
                         message: "Invalid password!".into(),
                         next_action: "require_password".into(),
                         session_token: "".into(),
+                        flow_token: "".into(),
                     }))
                 }
             },
@@ -139,6 +143,7 @@ impl AuthService for XAuthCoreService {
                     message: "Registration successful! You are authenticated.".into(),
                     next_action: "authenticated".into(),
                     session_token: token,
+                    flow_token: "".into(),
                 }))
             },
             _ => Err(Status::unimplemented("This step is not supported yet")),
