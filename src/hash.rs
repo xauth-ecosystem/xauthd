@@ -62,13 +62,13 @@ pub fn verify_password(password: &str, expected_hash: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Argon2idOptions, BcryptOptions, HashingOptions, PasswordHashingSettings};
+    use crate::config::{Argon2idSettings, BcryptSettings, PasswordHashingOptions, PasswordHashingSettings};
 
     fn get_bcrypt_settings() -> PasswordHashingSettings {
         PasswordHashingSettings {
             algorithm: "BCRYPT".to_string(),
-            options: Some(HashingOptions {
-                bcrypt: Some(BcryptOptions { cost: 4 }),
+            options: Some(PasswordHashingOptions {
+                bcrypt: Some(BcryptSettings { cost: 4 }),
                 argon2id: None,
             }),
         }
@@ -77,9 +77,9 @@ mod tests {
     fn get_argon2_settings() -> PasswordHashingSettings {
         PasswordHashingSettings {
             algorithm: "ARGON2ID".to_string(),
-            options: Some(HashingOptions {
+            options: Some(PasswordHashingOptions {
                 bcrypt: None,
-                argon2id: Some(Argon2idOptions {
+                argon2id: Some(Argon2idSettings {
                     memory_cost: 19456,
                     time_cost: 2,
                     threads: 1,
