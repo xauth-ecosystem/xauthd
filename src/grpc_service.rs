@@ -561,6 +561,7 @@ mod tests {
 
         let req = Request::new(PlayerInfoRequest {
             target_username: "unknown".into(),
+            requestor_id: "admin".into(),
         });
 
         let resp = service.get_player_info(req).await.unwrap().into_inner();
@@ -587,6 +588,7 @@ mod tests {
 
         let req = Request::new(PlayerInfoRequest {
             target_username: "known_user".into(),
+            requestor_id: "admin".into(),
         });
 
         let resp = service.get_player_info(req).await.unwrap().into_inner();
