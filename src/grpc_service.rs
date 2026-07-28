@@ -506,7 +506,7 @@ mod tests {
     use super::*;
     use crate::config::{
         AuthFlowSettings, DatabaseSettings, JwtSettings, NetworkSettings, PasswordHashingSettings,
-        SecuritySettings, Settings,
+        SecuritySettings, Settings, WebSettings,
     };
     use crate::db::Entity as UserEntity;
     use sea_orm::{ActiveModelTrait, ConnectionTrait, Database, Schema, Set};
@@ -517,7 +517,7 @@ mod tests {
         let schema = Schema::new(builder);
 
         let stmt = schema.create_table_from_entity(UserEntity);
-        db.execute(builder.build(&stmt)).await.unwrap();
+        db.execute(&stmt).await.unwrap();
 
         db
     }
