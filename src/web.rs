@@ -1,20 +1,14 @@
 use askama::Template;
 use axum::{
     extract::{Query, Form, State},
-    response::{Html, IntoResponse, sse::{Event, Sse}},
+    response::{Html, IntoResponse},
     routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::RwLock;
-use std::collections::HashMap;
 use sea_orm::DatabaseConnection;
-use uuid::Uuid;
 use crate::db::UserRepository;
-use tokio_stream::wrappers::ReceiverStream;
-use tokio::sync::mpsc;
-use std::convert::Infallible;
 
 #[derive(Template)]
 #[template(path = "login.html")]
@@ -77,18 +71,8 @@ struct ConsentForm {
 
 #[derive(Serialize)]
 struct LoginResponse {
-    request_id: Option<String>,
-    error: Option<String>,
-}
-
-#[derive(Serialize)]
-struct LoginEventData {
     redirect_url: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct SseQuery {
-    request_id: String,
+    error: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -127,7 +111,6 @@ struct TokenResponse {
 struct AppStateInner {
     db: DatabaseConnection,
     settings: Arc<crate::config::Settings>,
-    login_channels: RwLock<HashMap<String, mpsc::Receiver<String>>>,
     rsa_key: rsa::RsaPrivateKey,
 }
 
@@ -148,14 +131,9 @@ async fn authorize_get(Query(q): Query<LoginQuery>) -> impl IntoResponse {
 
 async fn login_post(State(state): State<AppState>, Form(f): Form<LoginForm>) -> impl IntoResponse {
     let repo = UserRepository::new(state.db.clone());
-    let (tx, rx) = mpsc::channel(1);
-    
-    let request_id = Uuid::new_v4().to_string();
-    state.login_channels.write().await.insert(request_id.clone(), rx);
-    
     let mut headers = axum::http::HeaderMap::new();
     
-    let result_data = match repo.get_user_by_name(&f.username).await {
+    match repo.get_user_by_name(&f.username).await {
         Ok(Some(user)) => {
             if crate::hash::verify_password(&f.password, &user.password_hash) {
                 if let Ok(session_token) = crate::jwt::generate_jwt(&user.username, &state.settings.jwt.secret, state.settings.jwt.session_ttl) {
@@ -179,23 +157,22 @@ async fn login_post(State(state): State<AppState>, Form(f): Form<LoginForm>) -> 
                 if let Some(n) = f.nonce {
                     url.push_str(&format!("&nonce={}", n));
                 }
-                serde_json::to_string(&LoginEventData { redirect_url: Some(url) }).unwrap()
+                (headers, Json(LoginResponse {
+                    redirect_url: Some(url),
+                    error: None,
+                }))
             } else {
-                serde_json::to_string(&LoginEventData { redirect_url: None }).unwrap()
+                (headers, Json(LoginResponse {
+                    redirect_url: None,
+                    error: Some("Invalid username or password".to_string()),
+                }))
             }
         },
-        _ => serde_json::to_string(&LoginEventData { redirect_url: None }).unwrap(),
-    };
-    
-    tokio::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        let _ = tx.send(result_data).await;
-    });
-    
-    (headers, Json(LoginResponse {
-        request_id: Some(request_id),
-        error: None,
-    }))
+        _ => (headers, Json(LoginResponse {
+            redirect_url: None,
+            error: Some("Invalid username or password".to_string()),
+        })),
+    }
 }
 
 fn get_username_from_cookie(headers: &axum::http::HeaderMap, state: &AppState) -> String {
@@ -213,21 +190,6 @@ fn get_username_from_cookie(headers: &axum::http::HeaderMap, state: &AppState) -
         }
     }
     "Guest".to_string()
-}
-
-async fn login_events_get(State(state): State<AppState>, Query(q): Query<SseQuery>) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
-    let rx_opt = state.login_channels.write().await.remove(&q.request_id);
-    let (tx, rx) = mpsc::channel(1);
-    
-    if let Some(mut backend_rx) = rx_opt {
-        tokio::spawn(async move {
-            if let Some(data) = backend_rx.recv().await {
-                let _ = tx.send(Ok(Event::default().event("login_result").data(data))).await;
-            }
-        });
-    }
-    
-    Sse::new(ReceiverStream::new(rx)).keep_alive(axum::response::sse::KeepAlive::new())
 }
 
 async fn consent_get(headers: axum::http::HeaderMap, State(state): State<AppState>, Query(q): Query<LoginQuery>) -> impl IntoResponse {
@@ -431,7 +393,6 @@ pub fn router(db: DatabaseConnection, settings: Arc<crate::config::Settings>) ->
     let state = Arc::new(AppStateInner {
         db,
         settings,
-        login_channels: RwLock::new(HashMap::new()),
         rsa_key,
     });
 
@@ -443,7 +404,6 @@ pub fn router(db: DatabaseConnection, settings: Arc<crate::config::Settings>) ->
         .route("/revoke", post(revoke_post))
         .route("/authorize", get(authorize_get))
         .route("/login", post(login_post))
-        .route("/login-events", get(login_events_get))
         .route("/consent", get(consent_get).post(consent_post))
         .route("/token", post(token_post))
         .with_state(state)
