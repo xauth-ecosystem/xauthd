@@ -47,6 +47,11 @@ access_token_ttl = 3600
 # Lifespan of an OAuth2 Refresh Token in seconds. Default: 604800 (7 days).
 refresh_token_ttl = 604800
 
+[security]
+# Maximum allowed failed password attempts across all interfaces (Game and Web).
+# Upon reaching this limit, the account is locked and cannot authenticate until reset.
+max_failed_attempts = 5
+
 [auth_flow]
 # Order of authentication steps for players who are not registered yet
 register_chain = ["captcha", "register"]
