@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 tokio = { version = "1.32", features = ["full"] }
 tokio-stream = "0.1"
-tonic = "0.10"
+tonic = "0.14"
 prost = "0.14"
 sea-orm = { version = "2.0.0", features = ["sqlx-sqlite", "sqlx-mysql", "sqlx-postgres", "runtime-tokio-rustls", "macros"] }
 sea-orm-migration = "2.0.0"
