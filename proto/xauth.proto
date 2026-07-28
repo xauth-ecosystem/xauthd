@@ -27,6 +27,7 @@ message AuthStepRequest {
     string server_id = 3;
     string step_type = 4;
     string input_data = 5; 
+    string flow_token = 6;
 }
 
 message AuthStepResponse {
@@ -34,6 +35,7 @@ message AuthStepResponse {
     string message = 2;
     string next_action = 3;
     string session_token = 4;
+    string flow_token = 5;
 }
 
 message SessionRequest {
