@@ -205,6 +205,16 @@ impl UserRepository {
         Ok(())
     }
 
+    pub async fn reset_failed_attempts(&self, user_id: i64) -> Result<(), DbErr> {
+        let update = ActiveModel {
+            id: Set(user_id),
+            failed_attempts: Set(0),
+            ..Default::default()
+        };
+        update.update(&self.db).await?;
+        Ok(())
+    }
+
     pub async fn set_must_change_password(&self, user_id: i64, val: bool) -> Result<(), DbErr> {
         let update = ActiveModel {
             id: Set(user_id),
