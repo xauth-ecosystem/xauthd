@@ -74,7 +74,7 @@ impl AuthService for XAuthCoreService {
         let repo = UserRepository::new(self.db.clone());
         
         let mut step_index = 0;
-        let mut chain_name;
+        let chain_name;
         
         if req.step_type == "init" {
             let user_exists = repo.get_user_by_name(&req.username).await.unwrap_or(None).is_some();
