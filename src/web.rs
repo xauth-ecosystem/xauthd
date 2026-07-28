@@ -135,7 +135,15 @@ async fn login_post(State(state): State<AppState>, Form(f): Form<LoginForm>) -> 
     
     match repo.get_user_by_name(&f.username).await {
         Ok(Some(user)) => {
+            if user.failed_attempts >= 5 {
+                return (headers, Json(LoginResponse {
+                    redirect_url: None,
+                    error: Some("Too many failed attempts. Account locked.".to_string()),
+                })).into_response();
+            }
+
             if crate::hash::verify_password(&f.password, &user.password_hash) {
+                repo.reset_failed_attempts(user.id).await.ok();
                 if let Ok(session_token) = crate::jwt::generate_jwt(&user.username, &state.settings.jwt.secret, state.settings.jwt.session_ttl) {
                     if let Ok(cookie_val) = format!("session_token={}; HttpOnly; Path=/; SameSite=Lax", session_token).parse() {
                         headers.insert(axum::http::header::SET_COOKIE, cookie_val);
@@ -160,18 +168,19 @@ async fn login_post(State(state): State<AppState>, Form(f): Form<LoginForm>) -> 
                 (headers, Json(LoginResponse {
                     redirect_url: Some(url),
                     error: None,
-                }))
+                })).into_response()
             } else {
+                repo.increment_failed_attempts(user.id).await.ok();
                 (headers, Json(LoginResponse {
                     redirect_url: None,
                     error: Some("Invalid username or password".to_string()),
-                }))
+                })).into_response()
             }
         },
         _ => (headers, Json(LoginResponse {
             redirect_url: None,
             error: Some("Invalid username or password".to_string()),
-        })),
+        })).into_response(),
     }
 }
 
