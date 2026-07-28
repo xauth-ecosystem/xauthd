@@ -62,6 +62,35 @@ By default, `start` runs the server in the foreground. If you are not using `sys
 ```
 Logs will be written to `xauthd.out` and `xauthd.err` in the current directory.
 
+## Deployment
+
+`xauthd` is designed to run continuously in the background on your server. You can deploy it using either Systemd (recommended for bare-metal/VPS) or Docker.
+
+### Option A: Systemd
+
+1. Compile the release build: `cargo build --release`
+2. Move the binary and config to a safe location (e.g., `/opt/xauthd/`).
+3. Copy the provided `xauthd.service` template to `/etc/systemd/system/xauthd.service`.
+4. Edit the paths in the service file to match your setup.
+5. Enable and start the service:
+   ```bash
+   systemctl daemon-reload
+   systemctl enable --now xauthd
+   ```
+6. View logs with: `journalctl -u xauthd -f`
+
+### Option B: Docker Compose
+
+We provide a `Dockerfile` and a `docker-compose.yml` for containerized environments.
+
+1. Ensure you have Docker and Docker Compose installed.
+2. Create your `xauthd.toml` configuration file.
+3. Start the daemon in the background:
+   ```bash
+   docker-compose up -d
+   ```
+4. View logs with: `docker-compose logs -f`
+
 ## Authentication Chains (Auth Flow)
 
 In `xauthd.toml`, you can flexibly define the sequence of steps for players:
