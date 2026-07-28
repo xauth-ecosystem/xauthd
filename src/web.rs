@@ -134,7 +134,15 @@ async fn login_post(State(state): State<AppState>, Form(f): Form<LoginForm>) -> 
     let mut headers = axum::http::HeaderMap::new();
     
     match repo.get_user_by_name(&f.username).await {
-        Ok(Some(user)) => {
+        Ok(Some(mut user)) => {
+            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+            if let Some(last_failed) = user.last_failed_attempt {
+                if now - last_failed > state.settings.security.failed_attempts_reset_interval {
+                    repo.reset_failed_attempts(user.id).await.ok();
+                    user.failed_attempts = 0;
+                }
+            }
+
             if user.failed_attempts >= state.settings.security.max_failed_attempts {
                 return (headers, Json(LoginResponse {
                     redirect_url: None,
