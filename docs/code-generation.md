@@ -26,12 +26,12 @@ Verify: `protoc --version`
 
 ### PHP gRPC runtime extensions
 
+Fedora and Debian do not ship these extensions as system packages. Install via PECL:
+
 ```bash
 # Any distro with PECL
 sudo pecl install grpc protobuf
 ```
-
-Fedora and Debian do not ship these extensions as system packages. PECL is the only option.
 
 Add to `php.ini`:
 
