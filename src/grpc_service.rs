@@ -546,8 +546,8 @@ mod tests {
                 failed_attempts_reset_interval: 3600,
             },
             auth_flow: AuthFlowSettings {
-                register_chain: vec![],
-                login_chain: vec![],
+                register_chain: vec!["password".into(), "totp".into()],
+                login_chain: vec!["password".into(), "totp".into()],
                 max_attempts_per_step: 3,
             },
         })
