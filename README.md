@@ -1,6 +1,7 @@
 # XAuth Daemon (`xauthd`)
 
 [![Rust CI](https://github.com/xauth-ecosystem/xauthd/actions/workflows/rust.yml/badge.svg)](https://github.com/xauth-ecosystem/xauthd/actions/workflows/rust.yml)
+[![Test Coverage](https://img.shields.io/codecov/c/github/xauth-ecosystem/xauthd?label=Test%20Coverage&logo=codecov)](https://app.codecov.io/gh/xauth-ecosystem/xauthd)
 
 A centralized authentication microservice for PocketMine-MP servers, written in Rust. `xauthd` uses gRPC for fast and secure communication with game servers, and JWT for stateless auth flow tracking.
 
