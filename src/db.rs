@@ -422,7 +422,7 @@ mod tests {
         ];
 
         for stmt in stmts {
-            db.execute(builder.build(&stmt)).await.unwrap();
+            db.execute(&stmt).await.unwrap();
         }
 
         db
