@@ -560,7 +560,7 @@ pub fn router(db: DatabaseConnection, settings: Arc<crate::config::Settings>) ->
         rsa_key,
     });
 
-    Router::new()
+    let app = Router::new()
         .route("/.well-known/openid-configuration", get(discovery_get))
         .route("/jwks", get(jwks_get))
         .route("/user", get(user_get).post(user_get))
@@ -572,21 +572,21 @@ pub fn router(db: DatabaseConnection, settings: Arc<crate::config::Settings>) ->
         .route("/token", post(token_post));
 
     // Serve static files from public_dir under /static/ if configured
-    let router = if let Some(public_dir) = &state.settings.web.public_dir {
+    let app = if let Some(public_dir) = &state.settings.web.public_dir {
         let public_path = std::path::Path::new(public_dir);
         if public_path.exists() && public_path.is_dir() {
             tracing::info!("Serving static files from '{}' under /static/", public_dir);
-            router.nest_service("/static", tower_http::services::ServeDir::new(public_dir))
+            app.nest_service("/static", tower_http::services::ServeDir::new(public_dir))
         } else {
             tracing::warn!(
                 "public_dir '{}' not found, static file serving disabled",
                 public_dir
             );
-            router
+            app
         }
     } else {
-        router
+        app
     };
 
-    router.with_state(state)
+    app.with_state(state)
 }
