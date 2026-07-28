@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  xauthd:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "50051:50051" # gRPC API
+      - "8080:8080"   # Web Dashboard / OAuth2
+    volumes:
+      - ./xauthd.toml:/app/xauthd.toml
+      # If using SQLite, mount the database file/folder as well
+      # - ./data:/app/data
