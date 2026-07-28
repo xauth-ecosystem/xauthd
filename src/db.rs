@@ -476,4 +476,116 @@ mod tests {
             .unwrap();
         assert!(!is_non_existent, "Non-existent client should return false");
     }
+
+    #[tokio::test]
+    async fn test_user_lifecycle() {
+        let db = setup_test_db().await;
+        let repo = UserRepository::new(db);
+
+        // Create
+        repo.create_user("test_user", "hash123").await.unwrap();
+
+        // Get
+        let user = repo.get_user_by_name("test_user").await.unwrap().unwrap();
+        assert_eq!(user.username, "test_user");
+        assert_eq!(user.password_hash, "hash123");
+        assert_eq!(user.failed_attempts, 0);
+
+        // Update login
+        repo.update_last_login(user.id, "192.168.1.1")
+            .await
+            .unwrap();
+        let user = repo.get_user_by_name("test_user").await.unwrap().unwrap();
+        assert_eq!(user.last_ip.unwrap(), "192.168.1.1");
+        assert!(user.last_login.is_some());
+
+        // Failed attempts
+        repo.increment_failed_attempts(user.id).await.unwrap();
+        repo.increment_failed_attempts(user.id).await.unwrap();
+        let user = repo.get_user_by_name("test_user").await.unwrap().unwrap();
+        assert_eq!(user.failed_attempts, 2);
+
+        repo.reset_failed_attempts(user.id).await.unwrap();
+        let user = repo.get_user_by_name("test_user").await.unwrap().unwrap();
+        assert_eq!(user.failed_attempts, 0);
+
+        // Update password and ban
+        repo.update_password(user.id, "new_hash").await.unwrap();
+        repo.set_must_change_password(user.id, true).await.unwrap();
+        repo.set_banned(user.id, true).await.unwrap();
+
+        let user = repo.get_user_by_name("test_user").await.unwrap().unwrap();
+        assert_eq!(user.password_hash, "new_hash");
+        assert!(user.must_change_password);
+        assert!(user.is_banned);
+    }
+
+    #[tokio::test]
+    async fn test_session_management() {
+        let db = setup_test_db().await;
+        let repo = UserRepository::new(db);
+
+        repo.create_user("session_user", "hash").await.unwrap();
+        let user = repo
+            .get_user_by_name("session_user")
+            .await
+            .unwrap()
+            .unwrap();
+
+        repo.create_session(user.id, "token123", "127.0.0.1", 3600)
+            .await
+            .unwrap();
+
+        let session = repo.get_session("token123").await.unwrap().unwrap();
+        assert_eq!(session.session_token, "token123");
+        assert_eq!(session.ip_address, "127.0.0.1");
+
+        repo.delete_session("token123").await.unwrap();
+        assert!(repo.get_session("token123").await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_oauth_token_management() {
+        let db = setup_test_db().await;
+        let repo = UserRepository::new(db);
+
+        repo.create_user("oauth_user", "hash").await.unwrap();
+        let user = repo.get_user_by_name("oauth_user").await.unwrap().unwrap();
+
+        repo.create_oauth_client("client1", "secret", "url")
+            .await
+            .unwrap();
+
+        repo.create_oauth_token(
+            "client1",
+            user.id,
+            "access_1",
+            Some("refresh_1"),
+            3600,
+            "profile",
+        )
+        .await
+        .unwrap();
+
+        let token_model = repo.get_oauth_token("access_1").await.unwrap().unwrap();
+        assert_eq!(token_model.access_token, "access_1");
+
+        let token_model_by_refresh = repo.get_oauth_token("refresh_1").await.unwrap().unwrap();
+        assert_eq!(token_model_by_refresh.access_token, "access_1");
+
+        repo.delete_oauth_token("access_1").await.unwrap();
+        assert!(repo.get_oauth_token("access_1").await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_token_blacklist() {
+        let db = setup_test_db().await;
+        let repo = UserRepository::new(db);
+
+        assert!(!repo.is_token_blacklisted("jti_123").await.unwrap());
+
+        repo.blacklist_token("jti_123", 9999999999).await.unwrap();
+
+        assert!(repo.is_token_blacklisted("jti_123").await.unwrap());
+    }
 }
