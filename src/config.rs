@@ -54,6 +54,7 @@ pub struct JwtSettings {
 #[derive(Debug, Deserialize, Clone)]
 pub struct SecuritySettings {
     pub max_failed_attempts: i32,
+    pub failed_attempts_reset_interval: i64,
 }
 
 #[derive(Debug, Deserialize, Clone)]
