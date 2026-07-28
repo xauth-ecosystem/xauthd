@@ -360,3 +360,56 @@ impl UserRepository {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sea_orm::{Database, Schema, ConnectionTrait};
+
+    async fn setup_test_db() -> DatabaseConnection {
+        let db = Database::connect("sqlite::memory:").await.unwrap();
+        let builder = db.get_database_backend();
+        let schema = Schema::new(builder);
+        
+        let stmt = schema.create_table_from_entity(oauth_clients::Entity);
+        db.execute(builder.build(&stmt)).await.unwrap();
+        
+        db
+    }
+
+    #[tokio::test]
+    async fn test_create_and_get_oauth_client() {
+        let db = setup_test_db().await;
+        let repo = UserRepository::new(db);
+
+        // Test creating client
+        let result = repo.create_oauth_client("client_123", "secret_456", "http://localhost/callback").await;
+        assert!(result.is_ok(), "Failed to create OAuth client");
+        
+        // Test fetching client
+        let client = repo.get_oauth_client("client_123").await.unwrap();
+        assert!(client.is_some(), "Client not found");
+        
+        let client = client.unwrap();
+        assert_eq!(client.client_id, "client_123");
+        assert_eq!(client.client_secret, "secret_456");
+        assert_eq!(client.redirect_uris, "http://localhost/callback");
+    }
+    
+    #[tokio::test]
+    async fn test_validate_oauth_client() {
+        let db = setup_test_db().await;
+        let repo = UserRepository::new(db);
+
+        repo.create_oauth_client("client_123", "secret_456", "http://localhost/callback").await.unwrap();
+        
+        let is_valid = repo.validate_oauth_client("client_123", "secret_456").await.unwrap();
+        assert!(is_valid, "Valid credentials should return true");
+        
+        let is_invalid = repo.validate_oauth_client("client_123", "wrong_secret").await.unwrap();
+        assert!(!is_invalid, "Invalid credentials should return false");
+        
+        let is_non_existent = repo.validate_oauth_client("non_existent", "secret_456").await.unwrap();
+        assert!(!is_non_existent, "Non-existent client should return false");
+    }
+}
