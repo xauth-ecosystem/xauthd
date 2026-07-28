@@ -288,6 +288,17 @@ impl UserRepository {
             .await
     }
 
+    pub async fn create_oauth_client(&self, client_id: &str, client_secret: &str, redirect_uris: &str) -> Result<(), DbErr> {
+        let new_client = oauth_clients::ActiveModel {
+            client_id: Set(client_id.to_owned()),
+            client_secret: Set(client_secret.to_owned()),
+            redirect_uris: Set(redirect_uris.to_owned()),
+            ..Default::default()
+        };
+        new_client.insert(&self.db).await?;
+        Ok(())
+    }
+
     pub async fn create_session(&self, user_id: i64, token: &str, ip: &str, expires_in_sec: i64) -> Result<(), DbErr> {
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
         let new_session = sessions::ActiveModel {
