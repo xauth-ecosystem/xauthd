@@ -117,7 +117,7 @@ impl AuthService for XAuthCoreService {
                         _ => return Err(Status::unauthenticated("User not found")),
                     };
                     
-                    if user.failed_attempts >= 5 {
+                    if user.failed_attempts >= self.settings.security.max_failed_attempts {
                         return Err(Status::permission_denied("Too many failed attempts. Account locked."));
                     }
                     
