@@ -500,3 +500,100 @@ impl AuthService for XAuthCoreService {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{
+        AuthFlowSettings, DatabaseSettings, JwtSettings, NetworkSettings, PasswordHashingSettings,
+        SecuritySettings, Settings,
+    };
+    use crate::db::Entity as UserEntity;
+    use sea_orm::{ActiveModelTrait, ConnectionTrait, Database, Schema, Set};
+
+    async fn setup_test_db() -> DatabaseConnection {
+        let db = Database::connect("sqlite::memory:").await.unwrap();
+        let builder = db.get_database_backend();
+        let schema = Schema::new(builder);
+
+        let stmt = schema.create_table_from_entity(UserEntity);
+        db.execute(builder.build(&stmt)).await.unwrap();
+
+        db
+    }
+
+    fn get_test_settings() -> Arc<Settings> {
+        Arc::new(Settings {
+            database: DatabaseSettings {
+                url: "".into(),
+            },
+            network: NetworkSettings {
+                grpc_address: "".into(),
+                web_address: "".into(),
+            },
+            password_hashing: PasswordHashingSettings {
+                algorithm: "BCRYPT".into(),
+                options: None,
+            },
+            jwt: JwtSettings {
+                secret: "secret".into(),
+                rsa_private_key_path: "".into(),
+                session_ttl: 3600,
+                auth_code_ttl: 3600,
+                access_token_ttl: 3600,
+                refresh_token_ttl: 3600,
+            },
+            security: SecuritySettings {
+                max_failed_attempts: 5,
+                failed_attempts_reset_interval: 3600,
+            },
+            auth_flow: AuthFlowSettings {
+                register_chain: vec![],
+                login_chain: vec![],
+                max_attempts_per_step: 3,
+            },
+        })
+    }
+
+    #[tokio::test]
+    async fn test_get_player_info_not_found() {
+        let db = setup_test_db().await;
+        let settings = get_test_settings();
+        let service = XAuthCoreService::new(db, settings);
+
+        let req = Request::new(PlayerInfoRequest {
+            target_username: "unknown".into(),
+        });
+
+        let resp = service.get_player_info(req).await.unwrap().into_inner();
+        assert!(!resp.exists);
+        assert_eq!(resp.username, "unknown");
+    }
+
+    #[tokio::test]
+    async fn test_get_player_info_exists() {
+        let db = setup_test_db().await;
+
+        let new_user = crate::db::ActiveModel {
+            username: Set("known_user".into()),
+            password_hash: Set("hash".into()),
+            failed_attempts: Set(0),
+            is_banned: Set(true),
+            must_change_password: Set(false),
+            ..Default::default()
+        };
+        new_user.insert(&db).await.unwrap();
+
+        let settings = get_test_settings();
+        let service = XAuthCoreService::new(db, settings);
+
+        let req = Request::new(PlayerInfoRequest {
+            target_username: "known_user".into(),
+        });
+
+        let resp = service.get_player_info(req).await.unwrap().into_inner();
+        assert!(resp.exists);
+        assert_eq!(resp.username, "known_user");
+        assert!(resp.is_banned);
+    }
+}
