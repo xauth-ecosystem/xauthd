@@ -116,7 +116,8 @@ make grpc_php_plugin -j$(nproc)
 sudo cp grpc_php_plugin /usr/local/bin/
 ```
 
-The `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` flag is required on systems with CMake ≥ 3.31.
+> [!NOTE]
+> The `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` flag is required on systems with CMake ≥ 3.31.
 
 Verify: `which grpc_php_plugin`
 
