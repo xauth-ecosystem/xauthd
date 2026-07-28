@@ -19,12 +19,12 @@
                         </h1>
                         <p class="ui center aligned sub header">Please log in to your server account to continue.</p>
                         
-                        {% if let Some(err) = error %}
-                            <div class="ui negative message">{{ err }}</div>
+                        {% if error %}
+                            <div class="ui negative message">{{ error }}</div>
                         {% endif %}
 
                         <form id="login-form" class="ui form" action="/login" method="post">
-                            {% if !client_id.is_empty() %}
+                            {% if client_id %}
                                 <input type="hidden" name="client_id" value="{{ client_id }}">
                                 <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
                                 <input type="hidden" name="state" value="{{ state }}">
