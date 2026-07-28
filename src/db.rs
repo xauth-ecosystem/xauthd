@@ -228,6 +228,27 @@ impl UserRepository {
         Ok(())
     }
 
+    pub async fn update_password(&self, user_id: i64, new_hash: &str) -> Result<(), DbErr> {
+        let update = ActiveModel {
+            id: Set(user_id),
+            password_hash: Set(new_hash.to_owned()),
+            failed_attempts: Set(0),
+            ..Default::default()
+        };
+        update.update(&self.db).await?;
+        Ok(())
+    }
+
+    pub async fn set_banned(&self, user_id: i64, val: bool) -> Result<(), DbErr> {
+        let update = ActiveModel {
+            id: Set(user_id),
+            is_banned: Set(val),
+            ..Default::default()
+        };
+        update.update(&self.db).await?;
+        Ok(())
+    }
+
     pub async fn blacklist_token(&self, token_jti: &str, expires_at: i64) -> Result<(), DbErr> {
         let new_blacklisted = token_blacklist::ActiveModel {
             token: Set(token_jti.to_owned()),
