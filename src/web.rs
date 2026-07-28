@@ -569,6 +569,24 @@ pub fn router(db: DatabaseConnection, settings: Arc<crate::config::Settings>) ->
         .route("/authorize", get(authorize_get))
         .route("/login", post(login_post))
         .route("/consent", get(consent_get).post(consent_post))
-        .route("/token", post(token_post))
-        .with_state(state)
+        .route("/token", post(token_post));
+
+    // Serve static files from public_dir under /static/ if configured
+    let router = if let Some(public_dir) = &state.settings.web.public_dir {
+        let public_path = std::path::Path::new(public_dir);
+        if public_path.exists() && public_path.is_dir() {
+            tracing::info!("Serving static files from '{}' under /static/", public_dir);
+            router.nest_service("/static", tower_http::services::ServeDir::new(public_dir))
+        } else {
+            tracing::warn!(
+                "public_dir '{}' not found, static file serving disabled",
+                public_dir
+            );
+            router
+        }
+    } else {
+        router
+    };
+
+    router.with_state(state)
 }
