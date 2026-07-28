@@ -196,7 +196,8 @@ curl -sL "https://repo1.maven.org/maven2/io/grpc/protoc-gen-grpc-java/${GRPC_JAV
 chmod +x /usr/local/bin/protoc-gen-grpc-java
 ```
 
-Available binaries: `linux-x86_64`, `linux-aarch_64`, `osx-x86_64`, `osx-aarch_64`, `windows-x86_64`.
+> [!NOTE]
+> Available binaries: `linux-x86_64`, `linux-aarch_64`, `osx-x86_64`, `osx-aarch_64`, `windows-x86_64`.
 
 #### Generate code
 
