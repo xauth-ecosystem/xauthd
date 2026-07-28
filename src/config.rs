@@ -67,6 +67,7 @@ pub struct AuthFlowSettings {
 #[derive(Debug, Deserialize, Clone)]
 pub struct WebSettings {
     pub templates_dir: String,
+    pub public_dir: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
