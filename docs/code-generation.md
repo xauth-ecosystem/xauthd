@@ -142,7 +142,7 @@ Output structure:
 ```
 gen/php/
 +-- ChernegaSergiy/XAuth/Grpc/
-|   +-- AuthServiceClient.php         # gRPC client stub
+|   +-- AuthServiceClient.php
 |   +-- AuthStepRequest.php
 |   +-- AuthStepResponse.php
 |   +-- SessionRequest.php
