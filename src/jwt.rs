@@ -1,8 +1,14 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey, errors::Error, Algorithm};
+use jsonwebtoken::{
+    decode, encode, errors::Error, Algorithm, DecodingKey, EncodingKey, Header, Validation,
+};
+use rsa::{
+    pkcs8::{DecodePrivateKey, EncodePrivateKey},
+    traits::PublicKeyParts,
+    RsaPrivateKey, RsaPublicKey,
+};
 use serde::{Deserialize, Serialize};
-use rsa::{RsaPrivateKey, RsaPublicKey, pkcs8::{EncodePrivateKey, DecodePrivateKey}, traits::PublicKeyParts};
 use std::fs;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -21,32 +27,42 @@ pub struct FlowClaims {
     pub exp: usize,
 }
 
-pub fn generate_flow_token(username: &str, chain: &str, step_index: usize, secret: &str, expiration_seconds: usize) -> Result<String, Error> {
+pub fn generate_flow_token(
+    username: &str,
+    chain: &str,
+    step_index: usize,
+    secret: &str,
+    expiration_seconds: usize,
+) -> Result<String, Error> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs() as usize;
-        
+
     let claims = FlowClaims {
         sub: username.to_owned(),
         chain: chain.to_owned(),
         step_index,
         exp: now + expiration_seconds,
     };
-    
-    encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_ref()))
+
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret.as_ref()),
+    )
 }
 
 pub fn validate_flow_token(token: &str, secret: &str) -> Result<FlowClaims, Error> {
     let mut validation = Validation::default();
     validation.leeway = 60;
-    
+
     let token_data = decode::<FlowClaims>(
         token,
         &DecodingKey::from_secret(secret.as_ref()),
         &validation,
     )?;
-    
+
     Ok(token_data.claims)
 }
 
@@ -56,10 +72,13 @@ pub fn get_or_create_rsa_key(path: &str) -> RsaPrivateKey {
             return key;
         }
     }
-    
+
     let mut rng = rand_core::OsRng;
     let priv_key = RsaPrivateKey::new(&mut rng, 2048).expect("failed to generate a key");
-    let pem = priv_key.to_pkcs8_pem(rsa::pkcs8::LineEnding::LF).expect("failed to encode key").to_string();
+    let pem = priv_key
+        .to_pkcs8_pem(rsa::pkcs8::LineEnding::LF)
+        .expect("failed to encode key")
+        .to_string();
     fs::write(path, pem).expect("failed to write key");
     priv_key
 }
@@ -68,9 +87,9 @@ pub fn get_jwks(priv_key: &RsaPrivateKey) -> serde_json::Value {
     let pub_key = RsaPublicKey::from(priv_key);
     let n = pub_key.n().to_bytes_be();
     let e = pub_key.e().to_bytes_be();
-    
-    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-    
+
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+
     serde_json::json!({
         "keys": [
             {
@@ -85,13 +104,21 @@ pub fn get_jwks(priv_key: &RsaPrivateKey) -> serde_json::Value {
     })
 }
 
-pub fn generate_jwt(username: &str, secret: &str, expiration_seconds: usize) -> Result<String, Error> {
+pub fn generate_jwt(
+    username: &str,
+    secret: &str,
+    expiration_seconds: usize,
+) -> Result<String, Error> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards")
         .as_secs() as usize;
-    let jti = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string();
-        
+    let jti = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+        .to_string();
+
     let claims = Claims {
         sub: username.to_owned(),
         jti,
@@ -99,19 +126,28 @@ pub fn generate_jwt(username: &str, secret: &str, expiration_seconds: usize) -> 
         exp: now + expiration_seconds,
         nonce: None,
     };
-    
+
     // We still keep the HS256 function for compatibility with other endpoints (like auth code).
     let header = Header::default();
     encode(&header, &claims, &EncodingKey::from_secret(secret.as_ref()))
 }
 
-pub fn generate_rs256_jwt(username: &str, priv_key: &RsaPrivateKey, expiration_seconds: usize, nonce: Option<String>) -> Result<String, Error> {
+pub fn generate_rs256_jwt(
+    username: &str,
+    priv_key: &RsaPrivateKey,
+    expiration_seconds: usize,
+    nonce: Option<String>,
+) -> Result<String, Error> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards")
         .as_secs() as usize;
-    let jti = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string();
-        
+    let jti = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+        .to_string();
+
     let claims = Claims {
         sub: username.to_owned(),
         jti,
@@ -119,25 +155,28 @@ pub fn generate_rs256_jwt(username: &str, priv_key: &RsaPrivateKey, expiration_s
         exp: now + expiration_seconds,
         nonce,
     };
-    
+
     let mut header = Header::new(Algorithm::RS256);
     header.kid = Some("default".to_string());
-    
-    let pem = priv_key.to_pkcs8_pem(rsa::pkcs8::LineEnding::LF).unwrap().to_string();
+
+    let pem = priv_key
+        .to_pkcs8_pem(rsa::pkcs8::LineEnding::LF)
+        .unwrap()
+        .to_string();
     let encoding_key = EncodingKey::from_rsa_pem(pem.as_bytes()).unwrap();
-    
+
     encode(&header, &claims, &encoding_key)
 }
 
 pub fn validate_jwt(token: &str, secret: &str) -> Result<Claims, Error> {
     let mut validation = Validation::default();
     validation.leeway = 60; // 1 minute leeway for clock skew
-    
+
     let token_data = decode::<Claims>(
         token,
         &DecodingKey::from_secret(secret.as_ref()),
         &validation,
     )?;
-    
+
     Ok(token_data.claims)
 }

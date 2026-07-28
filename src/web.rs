@@ -1,14 +1,14 @@
+use crate::db::UserRepository;
 use askama::Template;
 use axum::{
-    extract::{Query, Form, State},
+    extract::{Form, Query, State},
     response::{Html, IntoResponse},
     routing::{get, post},
     Json, Router,
 };
+use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use sea_orm::DatabaseConnection;
-use crate::db::UserRepository;
 
 #[derive(Template)]
 #[template(path = "login.html")]
@@ -132,10 +132,13 @@ async fn authorize_get(Query(q): Query<LoginQuery>) -> impl IntoResponse {
 async fn login_post(State(state): State<AppState>, Form(f): Form<LoginForm>) -> impl IntoResponse {
     let repo = UserRepository::new(state.db.clone());
     let mut headers = axum::http::HeaderMap::new();
-    
+
     match repo.get_user_by_name(&f.username).await {
         Ok(Some(mut user)) => {
-            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64;
             if let Some(last_failed) = user.last_failed_attempt {
                 if now - last_failed > state.settings.security.failed_attempts_reset_interval {
                     repo.reset_failed_attempts(user.id).await.ok();
@@ -144,16 +147,29 @@ async fn login_post(State(state): State<AppState>, Form(f): Form<LoginForm>) -> 
             }
 
             if user.failed_attempts >= state.settings.security.max_failed_attempts {
-                return (headers, Json(LoginResponse {
-                    redirect_url: None,
-                    error: Some("Too many failed attempts. Account locked.".to_string()),
-                })).into_response();
+                return (
+                    headers,
+                    Json(LoginResponse {
+                        redirect_url: None,
+                        error: Some("Too many failed attempts. Account locked.".to_string()),
+                    }),
+                )
+                    .into_response();
             }
 
             if crate::hash::verify_password(&f.password, &user.password_hash) {
                 repo.reset_failed_attempts(user.id).await.ok();
-                if let Ok(session_token) = crate::jwt::generate_jwt(&user.username, &state.settings.jwt.secret, state.settings.jwt.session_ttl) {
-                    if let Ok(cookie_val) = format!("session_token={}; HttpOnly; Path=/; SameSite=Lax", session_token).parse() {
+                if let Ok(session_token) = crate::jwt::generate_jwt(
+                    &user.username,
+                    &state.settings.jwt.secret,
+                    state.settings.jwt.session_ttl,
+                ) {
+                    if let Ok(cookie_val) = format!(
+                        "session_token={}; HttpOnly; Path=/; SameSite=Lax",
+                        session_token
+                    )
+                    .parse()
+                    {
                         headers.insert(axum::http::header::SET_COOKIE, cookie_val);
                     }
                 }
@@ -173,22 +189,34 @@ async fn login_post(State(state): State<AppState>, Form(f): Form<LoginForm>) -> 
                 if let Some(n) = f.nonce {
                     url.push_str(&format!("&nonce={}", n));
                 }
-                (headers, Json(LoginResponse {
-                    redirect_url: Some(url),
-                    error: None,
-                })).into_response()
+                (
+                    headers,
+                    Json(LoginResponse {
+                        redirect_url: Some(url),
+                        error: None,
+                    }),
+                )
+                    .into_response()
             } else {
                 repo.increment_failed_attempts(user.id).await.ok();
-                (headers, Json(LoginResponse {
-                    redirect_url: None,
-                    error: Some("Invalid username or password".to_string()),
-                })).into_response()
+                (
+                    headers,
+                    Json(LoginResponse {
+                        redirect_url: None,
+                        error: Some("Invalid username or password".to_string()),
+                    }),
+                )
+                    .into_response()
             }
-        },
-        _ => (headers, Json(LoginResponse {
-            redirect_url: None,
-            error: Some("Invalid username or password".to_string()),
-        })).into_response(),
+        }
+        _ => (
+            headers,
+            Json(LoginResponse {
+                redirect_url: None,
+                error: Some("Invalid username or password".to_string()),
+            }),
+        )
+            .into_response(),
     }
 }
 
@@ -199,7 +227,8 @@ fn get_username_from_cookie(headers: &axum::http::HeaderMap, state: &AppState) -
                 let part = part.trim();
                 if part.starts_with("session_token=") {
                     let token = &part["session_token=".len()..];
-                    if let Ok(claims) = crate::jwt::validate_jwt(token, &state.settings.jwt.secret) {
+                    if let Ok(claims) = crate::jwt::validate_jwt(token, &state.settings.jwt.secret)
+                    {
                         return claims.sub;
                     }
                 }
@@ -209,11 +238,15 @@ fn get_username_from_cookie(headers: &axum::http::HeaderMap, state: &AppState) -
     "Guest".to_string()
 }
 
-async fn consent_get(headers: axum::http::HeaderMap, State(state): State<AppState>, Query(q): Query<LoginQuery>) -> impl IntoResponse {
+async fn consent_get(
+    headers: axum::http::HeaderMap,
+    State(state): State<AppState>,
+    Query(q): Query<LoginQuery>,
+) -> impl IntoResponse {
     let username = get_username_from_cookie(&headers, &state);
     let repo = UserRepository::new(state.db.clone());
     let mut allowed_scopes = "profile".to_string();
-    
+
     if let Some(client_id) = &q.client_id {
         if let Ok(Some(client)) = repo.get_oauth_client(client_id).await {
             if let Some(scopes) = client.allowed_scopes {
@@ -235,7 +268,11 @@ async fn consent_get(headers: axum::http::HeaderMap, State(state): State<AppStat
     Html(template.render().unwrap())
 }
 
-async fn consent_post(headers: axum::http::HeaderMap, State(state): State<AppState>, Form(f): Form<ConsentForm>) -> impl IntoResponse {
+async fn consent_post(
+    headers: axum::http::HeaderMap,
+    State(state): State<AppState>,
+    Form(f): Form<ConsentForm>,
+) -> impl IntoResponse {
     if f.action == "approve" {
         let username = get_username_from_cookie(&headers, &state);
         let subject = serde_json::to_string(&serde_json::json!({
@@ -245,8 +282,14 @@ async fn consent_post(headers: axum::http::HeaderMap, State(state): State<AppSta
             "cc": f.code_challenge,
             "ccm": f.code_challenge_method,
             "n": f.nonce
-        })).unwrap_or_default();
-        let code = crate::jwt::generate_jwt(&subject, &state.settings.jwt.secret, state.settings.jwt.auth_code_ttl).unwrap_or_else(|_| "fallback_code".into());
+        }))
+        .unwrap_or_default();
+        let code = crate::jwt::generate_jwt(
+            &subject,
+            &state.settings.jwt.secret,
+            state.settings.jwt.auth_code_ttl,
+        )
+        .unwrap_or_else(|_| "fallback_code".into());
         let url = format!("{}?code={}&state={}", f.redirect_uri, code, f.state);
         axum::response::Redirect::to(&url).into_response()
     } else {
@@ -255,39 +298,53 @@ async fn consent_post(headers: axum::http::HeaderMap, State(state): State<AppSta
     }
 }
 
-async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>) -> impl IntoResponse {
+async fn token_post(
+    State(state): State<AppState>,
+    Form(req): Form<TokenRequest>,
+) -> impl IntoResponse {
     let repo = UserRepository::new(state.db.clone());
-    let is_valid = repo.validate_oauth_client(&req.client_id, &req.client_secret).await.unwrap_or(false);
-    
+    let is_valid = repo
+        .validate_oauth_client(&req.client_id, &req.client_secret)
+        .await
+        .unwrap_or(false);
+
     if !is_valid {
-        return (axum::http::StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "invalid_client"}))).into_response();
+        return (
+            axum::http::StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "invalid_client"})),
+        )
+            .into_response();
     }
-    
+
     if req.grant_type != "authorization_code" {
-        return (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "unsupported_grant_type"}))).into_response();
+        return (
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "unsupported_grant_type"})),
+        )
+            .into_response();
     }
-    
+
     let code = req.code.unwrap_or_default();
     if let Ok(claims) = crate::jwt::validate_jwt(&code, &state.settings.jwt.secret) {
         if let Ok(data) = serde_json::from_str::<serde_json::Value>(&claims.sub) {
             let u = data["u"].as_str().unwrap_or_default();
             let c = data["c"].as_str().unwrap_or_default();
             let r = data["r"].as_str().unwrap_or_default();
-            
+
             let cc = data["cc"].as_str().unwrap_or_default();
             let ccm = data["ccm"].as_str().unwrap_or_default();
             let req_redirect_uri = req.redirect_uri.unwrap_or_default();
-            
+
             if c == req.client_id && r == req_redirect_uri {
                 if !cc.is_empty() {
                     let code_verifier = req.code_verifier.unwrap_or_default();
                     if code_verifier.is_empty() {
                         return (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "invalid_request", "error_description": "code_verifier required"}))).into_response();
                     }
-                    
+
                     let is_valid = if ccm == "S256" {
-                        use sha2::{Sha256, Digest};
-                        use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+                        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+                        use sha2::{Digest, Sha256};
                         let mut hasher = Sha256::new();
                         hasher.update(code_verifier.as_bytes());
                         let hash = hasher.finalize();
@@ -298,21 +355,50 @@ async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>
                     } else {
                         false
                     };
-                    
+
                     if !is_valid {
                         return (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "invalid_grant", "error_description": "Invalid code_verifier"}))).into_response();
                     }
                 }
-                
+
                 if let Ok(Some(user)) = repo.get_user_by_name(u).await {
-                    let access_token = crate::jwt::generate_jwt(u, &state.settings.jwt.secret, state.settings.jwt.access_token_ttl).unwrap();
-                    let refresh_token = crate::jwt::generate_jwt(u, &state.settings.jwt.secret, state.settings.jwt.refresh_token_ttl).unwrap();
+                    let access_token = crate::jwt::generate_jwt(
+                        u,
+                        &state.settings.jwt.secret,
+                        state.settings.jwt.access_token_ttl,
+                    )
+                    .unwrap();
+                    let refresh_token = crate::jwt::generate_jwt(
+                        u,
+                        &state.settings.jwt.secret,
+                        state.settings.jwt.refresh_token_ttl,
+                    )
+                    .unwrap();
                     let n = data["n"].as_str().unwrap_or_default();
-                    let nonce_opt = if n.is_empty() { None } else { Some(n.to_string()) };
-                    let id_token = crate::jwt::generate_rs256_jwt(u, &state.rsa_key, state.settings.jwt.access_token_ttl, nonce_opt).unwrap();
-                    
+                    let nonce_opt = if n.is_empty() {
+                        None
+                    } else {
+                        Some(n.to_string())
+                    };
+                    let id_token = crate::jwt::generate_rs256_jwt(
+                        u,
+                        &state.rsa_key,
+                        state.settings.jwt.access_token_ttl,
+                        nonce_opt,
+                    )
+                    .unwrap();
+
                     let scopes = "openid profile";
-                    repo.create_oauth_token(&req.client_id, user.id, &access_token, Some(&refresh_token), state.settings.jwt.access_token_ttl as i64, scopes).await.ok();
+                    repo.create_oauth_token(
+                        &req.client_id,
+                        user.id,
+                        &access_token,
+                        Some(&refresh_token),
+                        state.settings.jwt.access_token_ttl as i64,
+                        scopes,
+                    )
+                    .await
+                    .ok();
 
                     return Json(TokenResponse {
                         access_token,
@@ -320,70 +406,124 @@ async fn token_post(State(state): State<AppState>, Form(req): Form<TokenRequest>
                         expires_in: state.settings.jwt.access_token_ttl,
                         refresh_token,
                         id_token,
-                    }).into_response();
+                    })
+                    .into_response();
                 }
             }
         }
     }
-    
-    (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "invalid_grant"}))).into_response()
+
+    (
+        axum::http::StatusCode::BAD_REQUEST,
+        Json(serde_json::json!({"error": "invalid_grant"})),
+    )
+        .into_response()
 }
 
-async fn user_get(State(state): State<AppState>, headers: axum::http::HeaderMap) -> impl IntoResponse {
+async fn user_get(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> impl IntoResponse {
     let repo = UserRepository::new(state.db.clone());
     if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
         if let Ok(auth_str) = auth_header.to_str() {
             if auth_str.starts_with("Bearer ") {
                 let token = &auth_str["Bearer ".len()..];
                 if let Ok(claims) = crate::jwt::validate_jwt(token, &state.settings.jwt.secret) {
-                    if !repo.is_token_blacklisted(&claims.jti).await.unwrap_or(false) {
-                        return (axum::http::StatusCode::OK, Json(serde_json::json!({
-                            "sub": claims.sub.clone(),
-                            "preferred_username": claims.sub.clone(),
-                            "name": claims.sub
-                        }))).into_response();
+                    if !repo
+                        .is_token_blacklisted(&claims.jti)
+                        .await
+                        .unwrap_or(false)
+                    {
+                        return (
+                            axum::http::StatusCode::OK,
+                            Json(serde_json::json!({
+                                "sub": claims.sub.clone(),
+                                "preferred_username": claims.sub.clone(),
+                                "name": claims.sub
+                            })),
+                        )
+                            .into_response();
                     }
                 }
             }
         }
     }
-    (axum::http::StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "invalid_token"}))).into_response()
+    (
+        axum::http::StatusCode::UNAUTHORIZED,
+        Json(serde_json::json!({"error": "invalid_token"})),
+    )
+        .into_response()
 }
 
-async fn introspect_post(State(state): State<AppState>, Form(req): Form<IntrospectRequest>) -> impl IntoResponse {
+async fn introspect_post(
+    State(state): State<AppState>,
+    Form(req): Form<IntrospectRequest>,
+) -> impl IntoResponse {
     let repo = UserRepository::new(state.db.clone());
-    let is_valid = repo.validate_oauth_client(&req.client_id, &req.client_secret).await.unwrap_or(false);
+    let is_valid = repo
+        .validate_oauth_client(&req.client_id, &req.client_secret)
+        .await
+        .unwrap_or(false);
     if !is_valid {
-        return (axum::http::StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "invalid_client"}))).into_response();
+        return (
+            axum::http::StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "invalid_client"})),
+        )
+            .into_response();
     }
 
     if let Ok(claims) = crate::jwt::validate_jwt(&req.token, &state.settings.jwt.secret) {
-        if !repo.is_token_blacklisted(&claims.jti).await.unwrap_or(false) {
-            return (axum::http::StatusCode::OK, Json(serde_json::json!({
-                "active": true,
-                "sub": claims.sub,
-                "exp": claims.exp,
-                "iat": claims.iat
-            }))).into_response();
+        if !repo
+            .is_token_blacklisted(&claims.jti)
+            .await
+            .unwrap_or(false)
+        {
+            return (
+                axum::http::StatusCode::OK,
+                Json(serde_json::json!({
+                    "active": true,
+                    "sub": claims.sub,
+                    "exp": claims.exp,
+                    "iat": claims.iat
+                })),
+            )
+                .into_response();
         }
     }
-    
-    (axum::http::StatusCode::OK, Json(serde_json::json!({"active": false}))).into_response()
+
+    (
+        axum::http::StatusCode::OK,
+        Json(serde_json::json!({"active": false})),
+    )
+        .into_response()
 }
 
-async fn revoke_post(State(state): State<AppState>, Form(req): Form<RevokeRequest>) -> impl IntoResponse {
+async fn revoke_post(
+    State(state): State<AppState>,
+    Form(req): Form<RevokeRequest>,
+) -> impl IntoResponse {
     let repo = UserRepository::new(state.db.clone());
-    let is_valid = repo.validate_oauth_client(&req.client_id, &req.client_secret).await.unwrap_or(false);
+    let is_valid = repo
+        .validate_oauth_client(&req.client_id, &req.client_secret)
+        .await
+        .unwrap_or(false);
     if !is_valid {
-        return (axum::http::StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "invalid_client"}))).into_response();
+        return (
+            axum::http::StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "invalid_client"})),
+        )
+            .into_response();
     }
 
     repo.delete_oauth_token(&req.token).await.ok();
 
     if let Ok(claims) = crate::jwt::validate_jwt(&req.token, &state.settings.jwt.secret) {
-        repo.blacklist_token(&claims.jti, claims.exp as i64).await.ok();
+        repo.blacklist_token(&claims.jti, claims.exp as i64)
+            .await
+            .ok();
     }
-    
+
     axum::http::StatusCode::OK.into_response()
 }
 

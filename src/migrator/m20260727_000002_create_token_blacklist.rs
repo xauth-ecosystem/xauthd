@@ -18,8 +18,17 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(TokenBlacklist::Token).string().not_null().unique_key())
-                    .col(ColumnDef::new(TokenBlacklist::ExpiresAt).big_integer().not_null())
+                    .col(
+                        ColumnDef::new(TokenBlacklist::Token)
+                            .string()
+                            .not_null()
+                            .unique_key(),
+                    )
+                    .col(
+                        ColumnDef::new(TokenBlacklist::ExpiresAt)
+                            .big_integer()
+                            .not_null(),
+                    )
                     .to_owned(),
             )
             .await

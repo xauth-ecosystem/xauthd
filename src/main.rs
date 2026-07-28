@@ -16,8 +16,8 @@ pub mod xauth_v1 {
 }
 
 use crate::grpc_service::XAuthCoreService;
-use crate::xauth_v1::auth_service_server::AuthServiceServer;
 use crate::migrator::Migrator;
+use crate::xauth_v1::auth_service_server::AuthServiceServer;
 use sea_orm_migration::MigratorTrait;
 
 use clap::{Parser, Subcommand};
@@ -55,9 +55,7 @@ enum AdminCommands {
         new_password: String,
     },
     /// Unbans a player
-    Unban {
-        username: String,
-    },
+    Unban { username: String },
     /// Creates a new OAuth2 Client
     CreateOauthClient {
         #[arg(long)]
@@ -74,12 +72,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if *daemon {
             let stdout = std::fs::File::create("xauthd.out")?;
             let stderr = std::fs::File::create("xauthd.err")?;
-            
+
             let daemonize = daemonize::Daemonize::new()
                 .working_directory(std::env::current_dir()?)
                 .stdout(stdout)
                 .stderr(stderr);
-                
+
             match daemonize.start() {
                 Ok(_) => println!("Successfully daemonized! Running in background."),
                 Err(e) => {
@@ -91,7 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     tracing_subscriber::fmt::init();
-    
+
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async_main(cli))
 }
@@ -102,7 +100,10 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             info!("Starting XAuth Core Daemon...");
 
             let settings = config::Settings::new().unwrap_or_else(|err| {
-                tracing::error!("Failed to load configuration: {}. Please check your xauthd.toml.", err);
+                tracing::error!(
+                    "Failed to load configuration: {}. Please check your xauthd.toml.",
+                    err
+                );
                 std::process::exit(1);
             });
 
@@ -112,22 +113,26 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             Migrator::up(&db, None).await?;
             info!("Migrations applied successfully.");
 
-            let core_service = XAuthCoreService::new(db.clone(), std::sync::Arc::new(settings.clone()));
+            let core_service =
+                XAuthCoreService::new(db.clone(), std::sync::Arc::new(settings.clone()));
 
             let addr: SocketAddr = settings.network.grpc_address.parse()?;
-            
+
             info!("XAuth Core gRPC listening on {}", addr);
 
             let grpc_server = Server::builder()
                 .add_service(AuthServiceServer::new(core_service))
                 .serve(addr);
-                
+
             let web_app = crate::web::router(db.clone(), std::sync::Arc::new(settings.clone()));
             let web_listener = tokio::net::TcpListener::bind(&settings.network.web_address).await?;
-            info!("XAuth Web Dashboard listening on {}", settings.network.web_address);
-            
+            info!(
+                "XAuth Web Dashboard listening on {}",
+                settings.network.web_address
+            );
+
             let web_server = axum::serve(web_listener, web_app);
-            
+
             let (grpc_res, web_res) = tokio::join!(grpc_server, web_server);
             grpc_res?;
             web_res.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
@@ -139,21 +144,24 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             Migrator::up(&db, None).await?;
             info!("Migrations applied successfully.");
         }
-        Commands::ConfigCheck => {
-            match config::Settings::new() {
-                Ok(_) => info!("Configuration syntax is valid."),
-                Err(e) => tracing::error!("Configuration error: {}", e),
-            }
-        }
+        Commands::ConfigCheck => match config::Settings::new() {
+            Ok(_) => info!("Configuration syntax is valid."),
+            Err(e) => tracing::error!("Configuration error: {}", e),
+        },
         Commands::Admin { admin_cmd } => {
             let settings = config::Settings::new()?;
             let db = Database::connect(&settings.database.url).await?;
             let repo = crate::db::UserRepository::new(db);
-            
+
             match admin_cmd {
-                AdminCommands::ResetPassword { username, new_password } => {
+                AdminCommands::ResetPassword {
+                    username,
+                    new_password,
+                } => {
                     if let Some(user) = repo.get_user_by_name(username).await? {
-                        let hash = crate::hash::hash_password(new_password, &settings.password_hashing).unwrap();
+                        let hash =
+                            crate::hash::hash_password(new_password, &settings.password_hashing)
+                                .unwrap();
                         repo.update_password(user.id, &hash).await?;
                         info!("Password reset successfully for user '{}'.", username);
                     } else {
@@ -170,19 +178,20 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 AdminCommands::CreateOauthClient { name, redirect_uri } => {
-                    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+                    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
                     use rand::Rng;
-                    
+
                     let mut id_bytes = [0u8; 16];
                     let mut secret_bytes = [0u8; 32];
                     rand::rng().fill_bytes(&mut id_bytes);
                     rand::rng().fill_bytes(&mut secret_bytes);
-                    
+
                     let client_id = URL_SAFE_NO_PAD.encode(&id_bytes);
                     let client_secret = URL_SAFE_NO_PAD.encode(&secret_bytes);
-                    
-                    repo.create_oauth_client(&client_id, &client_secret, redirect_uri).await?;
-                    
+
+                    repo.create_oauth_client(&client_id, &client_secret, redirect_uri)
+                        .await?;
+
                     println!("OAuth2 Client '{}' created successfully!", name);
                     println!("Client ID: {}", client_id);
                     println!("Client Secret: {}", client_secret);

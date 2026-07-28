@@ -1,6 +1,6 @@
-use sea_orm_migration::prelude::*;
 use super::m20260727_000001_create_user_table::Users;
 use super::m20260727_000003_create_oauth_clients::OAuthClients;
+use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -22,9 +22,22 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(OAuthTokens::ClientId).string().not_null())
                     .col(ColumnDef::new(OAuthTokens::UserId).big_integer().not_null())
-                    .col(ColumnDef::new(OAuthTokens::AccessToken).string().not_null().unique_key())
-                    .col(ColumnDef::new(OAuthTokens::RefreshToken).string().unique_key())
-                    .col(ColumnDef::new(OAuthTokens::ExpiresAt).big_integer().not_null())
+                    .col(
+                        ColumnDef::new(OAuthTokens::AccessToken)
+                            .string()
+                            .not_null()
+                            .unique_key(),
+                    )
+                    .col(
+                        ColumnDef::new(OAuthTokens::RefreshToken)
+                            .string()
+                            .unique_key(),
+                    )
+                    .col(
+                        ColumnDef::new(OAuthTokens::ExpiresAt)
+                            .big_integer()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(OAuthTokens::Scopes).string().not_null())
                     .foreign_key(
                         ForeignKey::create()

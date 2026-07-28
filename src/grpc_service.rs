@@ -1,17 +1,16 @@
+use crate::db::UserRepository;
 use crate::xauth_v1::auth_service_server::AuthService;
 use crate::xauth_v1::{
-    AuthStepRequest, AuthStepResponse, CoreCommand, EndSessionRequest,
+    core_command::CommandType, AuthStepRequest, AuthStepResponse, CoreCommand, EndSessionRequest,
     EndSessionResponse, ForcePasswordChangeRequest, ForcePasswordChangeResponse,
     OAuthRevokeRequest, OAuthRevokeResponse, OAuthTokenRequest, OAuthTokenResponse,
     PlayerInfoRequest, PlayerInfoResponse, PluginEvent, SessionRequest, SessionResponse,
-    core_command::CommandType,
 };
-use crate::db::UserRepository;
+use sea_orm::DatabaseConnection;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
-use sea_orm::DatabaseConnection;
 use tokio::sync::mpsc;
+use tokio::sync::RwLock;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 use tracing::info;
@@ -51,12 +50,18 @@ impl AuthService for XAuthCoreService {
             while let Ok(Some(event)) = in_stream.message().await {
                 if registered_server_id.is_none() {
                     registered_server_id = Some(event.server_id.clone());
-                    clients.write().await.insert(event.server_id.clone(), tx.clone());
-                    info!("Registered streaming channel for server: {}", event.server_id);
+                    clients
+                        .write()
+                        .await
+                        .insert(event.server_id.clone(), tx.clone());
+                    info!(
+                        "Registered streaming channel for server: {}",
+                        event.server_id
+                    );
                 }
                 info!("Event from {}: {:?}", event.server_id, event.r#type);
             }
-            
+
             if let Some(id) = registered_server_id {
                 clients.write().await.remove(&id);
                 info!("Unregistered streaming channel for server: {}", id);
@@ -72,43 +77,52 @@ impl AuthService for XAuthCoreService {
     ) -> Result<Response<AuthStepResponse>, Status> {
         let req = request.into_inner();
         let repo = UserRepository::new(self.db.clone());
-        
+
         let mut step_index = 0;
         let chain_name;
-        
+
         if req.step_type == "init" {
-            let user_exists = repo.get_user_by_name(&req.username).await.unwrap_or(None).is_some();
-            chain_name = if user_exists { "login".to_string() } else { "register".to_string() };
+            let user_exists = repo
+                .get_user_by_name(&req.username)
+                .await
+                .unwrap_or(None)
+                .is_some();
+            chain_name = if user_exists {
+                "login".to_string()
+            } else {
+                "register".to_string()
+            };
         } else {
             if req.flow_token.is_empty() {
                 return Err(Status::unauthenticated("Missing flow_token"));
             }
-            let claims = match crate::jwt::validate_flow_token(&req.flow_token, &self.settings.jwt.secret) {
-                Ok(c) => c,
-                Err(_) => return Err(Status::unauthenticated("Invalid or expired flow_token")),
-            };
+            let claims =
+                match crate::jwt::validate_flow_token(&req.flow_token, &self.settings.jwt.secret) {
+                    Ok(c) => c,
+                    Err(_) => return Err(Status::unauthenticated("Invalid or expired flow_token")),
+                };
             if claims.sub != req.username {
                 return Err(Status::unauthenticated("Token username mismatch"));
             }
             step_index = claims.step_index;
             chain_name = claims.chain;
         }
-        
+
         let chain = if chain_name == "login" {
             &self.settings.auth_flow.login_chain
         } else {
             &self.settings.auth_flow.register_chain
         };
-        
+
         if step_index >= chain.len() {
             return Err(Status::internal("Auth flow exceeded"));
         }
-        
+
         let current_step = &chain[step_index];
         let mut success = false;
         let mut message = String::new();
         let mut step_completed = false;
-        
+
         match current_step.as_str() {
             "password" => {
                 if req.step_type == "password" {
@@ -116,19 +130,25 @@ impl AuthService for XAuthCoreService {
                         Ok(Some(u)) => u,
                         _ => return Err(Status::unauthenticated("User not found")),
                     };
-                    
-                    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs() as i64;
                     if let Some(last_failed) = user.last_failed_attempt {
-                        if now - last_failed > self.settings.security.failed_attempts_reset_interval {
+                        if now - last_failed > self.settings.security.failed_attempts_reset_interval
+                        {
                             repo.reset_failed_attempts(user.id).await.ok();
                             user.failed_attempts = 0;
                         }
                     }
 
                     if user.failed_attempts >= self.settings.security.max_failed_attempts {
-                        return Err(Status::permission_denied("Too many failed attempts. Account locked."));
+                        return Err(Status::permission_denied(
+                            "Too many failed attempts. Account locked.",
+                        ));
                     }
-                    
+
                     if crate::hash::verify_password(&req.input_data, &user.password_hash) {
                         repo.reset_failed_attempts(user.id).await.ok();
                         success = true;
@@ -142,11 +162,14 @@ impl AuthService for XAuthCoreService {
                 } else {
                     return Err(Status::invalid_argument("Expected password step"));
                 }
-            },
+            }
             "register" => {
                 if req.step_type == "register" {
-                    let hash = crate::hash::hash_password(&req.input_data, &self.settings.password_hashing)
-                        .map_err(|_| Status::internal("Hash failed"))?;
+                    let hash = crate::hash::hash_password(
+                        &req.input_data,
+                        &self.settings.password_hashing,
+                    )
+                    .map_err(|_| Status::internal("Hash failed"))?;
                     if repo.create_user(&req.username, &hash).await.is_ok() {
                         success = true;
                         step_completed = true;
@@ -158,11 +181,15 @@ impl AuthService for XAuthCoreService {
                 } else {
                     return Err(Status::invalid_argument("Expected register step"));
                 }
-            },
+            }
             "totp" => {
                 let user = repo.get_user_by_name(&req.username).await.unwrap_or(None);
-                let has_2fa = if let Some(u) = &user { repo.is_2fa_enabled(u.id).await.unwrap_or(false) } else { false };
-                
+                let has_2fa = if let Some(u) = &user {
+                    repo.is_2fa_enabled(u.id).await.unwrap_or(false)
+                } else {
+                    false
+                };
+
                 if !has_2fa {
                     success = true;
                     step_completed = true;
@@ -175,7 +202,7 @@ impl AuthService for XAuthCoreService {
                 } else {
                     return Err(Status::invalid_argument("Expected totp step"));
                 }
-            },
+            }
             custom_step => {
                 let complete_signal = format!("{}_complete", custom_step);
                 if req.step_type == complete_signal {
@@ -184,15 +211,18 @@ impl AuthService for XAuthCoreService {
                 } else if req.step_type == "init" {
                     success = true;
                 } else {
-                    return Err(Status::invalid_argument(format!("Expected {}", complete_signal)));
+                    return Err(Status::invalid_argument(format!(
+                        "Expected {}",
+                        complete_signal
+                    )));
                 }
             }
         }
-        
+
         if step_completed {
             step_index += 1;
         }
-        
+
         // Skip any subsequent steps that should be auto-skipped (like totp when not enabled).
         // A recursive or loop approach is best here, but for now we only check the next step if it's totp.
         // To keep it simple, we let the client send a dummy request or we can handle it via a loop.
@@ -202,7 +232,11 @@ impl AuthService for XAuthCoreService {
             let eval_step = &chain[step_index];
             if eval_step == "totp" {
                 let user = repo.get_user_by_name(&req.username).await.unwrap_or(None);
-                let has_2fa = if let Some(u) = &user { repo.is_2fa_enabled(u.id).await.unwrap_or(false) } else { false };
+                let has_2fa = if let Some(u) = &user {
+                    repo.is_2fa_enabled(u.id).await.unwrap_or(false)
+                } else {
+                    false
+                };
                 if !has_2fa {
                     step_index += 1;
                     continue;
@@ -210,14 +244,26 @@ impl AuthService for XAuthCoreService {
             }
             break;
         }
-        
+
         if step_index >= chain.len() {
             let user = repo.get_user_by_name(&req.username).await.unwrap_or(None);
             if let Some(u) = user {
-                let token = crate::jwt::generate_jwt(&u.username, &self.settings.jwt.secret, self.settings.jwt.session_ttl).unwrap_or_default();
-                repo.create_session(u.id, &token, &req.ip_address, self.settings.jwt.session_ttl as i64).await.ok();
+                let token = crate::jwt::generate_jwt(
+                    &u.username,
+                    &self.settings.jwt.secret,
+                    self.settings.jwt.session_ttl,
+                )
+                .unwrap_or_default();
+                repo.create_session(
+                    u.id,
+                    &token,
+                    &req.ip_address,
+                    self.settings.jwt.session_ttl as i64,
+                )
+                .await
+                .ok();
                 repo.update_last_login(u.id, &req.ip_address).await.ok();
-                
+
                 return Ok(Response::new(AuthStepResponse {
                     success: true,
                     message: "Successfully authenticated!".into(),
@@ -229,16 +275,17 @@ impl AuthService for XAuthCoreService {
                 return Err(Status::internal("User not found at end of flow"));
             }
         }
-        
+
         let next_step = &chain[step_index];
         let new_flow_token = crate::jwt::generate_flow_token(
             &req.username,
             &chain_name,
             step_index,
             &self.settings.jwt.secret,
-            600 
-        ).unwrap_or_default();
-        
+            600,
+        )
+        .unwrap_or_default();
+
         Ok(Response::new(AuthStepResponse {
             success,
             message,
@@ -248,48 +295,64 @@ impl AuthService for XAuthCoreService {
         }))
     }
 
-    async fn validate_session(&self, request: Request<SessionRequest>) -> Result<Response<SessionResponse>, Status> {
+    async fn validate_session(
+        &self,
+        request: Request<SessionRequest>,
+    ) -> Result<Response<SessionResponse>, Status> {
         let req = request.into_inner();
         let repo = UserRepository::new(self.db.clone());
-        
+
         let mut is_valid = false;
         let mut username = String::new();
         let mut expires_at = 0;
 
         if let Ok(Some(session)) = repo.get_session(&req.session_token).await {
-            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64;
             if session.expires_at > now {
-                if let Ok(claims) = crate::jwt::validate_jwt(&req.session_token, &self.settings.jwt.secret) {
+                if let Ok(claims) =
+                    crate::jwt::validate_jwt(&req.session_token, &self.settings.jwt.secret)
+                {
                     is_valid = true;
                     username = claims.sub;
                     expires_at = session.expires_at;
                 }
             }
         }
-        
+
         Ok(Response::new(SessionResponse {
             is_valid,
             username,
             expires_at,
         }))
     }
-    
-    async fn end_session(&self, request: Request<EndSessionRequest>) -> Result<Response<EndSessionResponse>, Status> {
+
+    async fn end_session(
+        &self,
+        request: Request<EndSessionRequest>,
+    ) -> Result<Response<EndSessionResponse>, Status> {
         let req = request.into_inner();
         let repo = UserRepository::new(self.db.clone());
-        
+
         repo.delete_session(&req.session_token).await.ok();
-        
-        Ok(Response::new(EndSessionResponse {
-            success: true,
-        }))
+
+        Ok(Response::new(EndSessionResponse { success: true }))
     }
 
-    async fn generate_o_auth_token(&self, request: Request<OAuthTokenRequest>) -> Result<Response<OAuthTokenResponse>, Status> {
+    async fn generate_o_auth_token(
+        &self,
+        request: Request<OAuthTokenRequest>,
+    ) -> Result<Response<OAuthTokenResponse>, Status> {
         let req = request.into_inner();
         let repo = UserRepository::new(self.db.clone());
-        
-        if !repo.validate_oauth_client(&req.client_id, &req.client_secret).await.unwrap_or(false) {
+
+        if !repo
+            .validate_oauth_client(&req.client_id, &req.client_secret)
+            .await
+            .unwrap_or(false)
+        {
             return Ok(Response::new(OAuthTokenResponse {
                 success: false,
                 access_token: "".into(),
@@ -304,14 +367,33 @@ impl AuthService for XAuthCoreService {
                 let u = data["u"].as_str().unwrap_or_default();
                 let c = data["c"].as_str().unwrap_or_default();
                 let r = data["r"].as_str().unwrap_or_default();
-                
+
                 if c == req.client_id && r == req.redirect_uri {
                     if let Ok(Some(user)) = repo.get_user_by_name(u).await {
-                        let access_token = crate::jwt::generate_jwt(u, &self.settings.jwt.secret, self.settings.jwt.access_token_ttl).unwrap_or_default();
-                        let refresh_token = crate::jwt::generate_jwt(u, &self.settings.jwt.secret, self.settings.jwt.refresh_token_ttl).unwrap_or_default();
+                        let access_token = crate::jwt::generate_jwt(
+                            u,
+                            &self.settings.jwt.secret,
+                            self.settings.jwt.access_token_ttl,
+                        )
+                        .unwrap_or_default();
+                        let refresh_token = crate::jwt::generate_jwt(
+                            u,
+                            &self.settings.jwt.secret,
+                            self.settings.jwt.refresh_token_ttl,
+                        )
+                        .unwrap_or_default();
                         let scopes = "openid profile";
 
-                        repo.create_oauth_token(&req.client_id, user.id, &access_token, Some(&refresh_token), self.settings.jwt.access_token_ttl as i64, scopes).await.ok();
+                        repo.create_oauth_token(
+                            &req.client_id,
+                            user.id,
+                            &access_token,
+                            Some(&refresh_token),
+                            self.settings.jwt.access_token_ttl as i64,
+                            scopes,
+                        )
+                        .await
+                        .ok();
 
                         return Ok(Response::new(OAuthTokenResponse {
                             success: true,
@@ -334,83 +416,86 @@ impl AuthService for XAuthCoreService {
         }))
     }
 
-    async fn revoke_o_auth_token(&self, request: Request<OAuthRevokeRequest>) -> Result<Response<OAuthRevokeResponse>, Status> {
+    async fn revoke_o_auth_token(
+        &self,
+        request: Request<OAuthRevokeRequest>,
+    ) -> Result<Response<OAuthRevokeResponse>, Status> {
         let req = request.into_inner();
         let repo = UserRepository::new(self.db.clone());
-        
+
         repo.delete_oauth_token(&req.token).await.ok();
-        
+
         if let Ok(claims) = crate::jwt::validate_jwt(&req.token, &self.settings.jwt.secret) {
-            repo.blacklist_token(&claims.jti, claims.exp as i64).await.ok();
+            repo.blacklist_token(&claims.jti, claims.exp as i64)
+                .await
+                .ok();
         }
-        
-        Ok(Response::new(OAuthRevokeResponse {
-            success: true,
-        }))
+
+        Ok(Response::new(OAuthRevokeResponse { success: true }))
     }
 
-    async fn get_player_info(&self, request: Request<PlayerInfoRequest>) -> Result<Response<PlayerInfoResponse>, Status> {
+    async fn get_player_info(
+        &self,
+        request: Request<PlayerInfoRequest>,
+    ) -> Result<Response<PlayerInfoResponse>, Status> {
         let req = request.into_inner();
         let repo = UserRepository::new(self.db.clone());
-        
+
         match repo.get_user_by_name(&req.target_username).await {
             Ok(Some(user)) => {
                 let has_2fa = repo.is_2fa_enabled(user.id).await.unwrap_or(false);
-                
+
                 Ok(Response::new(PlayerInfoResponse {
                     exists: true,
                     username: user.username.clone(),
-                    is_banned: user.is_banned, 
+                    is_banned: user.is_banned,
                     has_2fa,
-                    last_ip: user.last_ip.unwrap_or_default(), 
-                    last_login: user.last_login.unwrap_or(0), 
-                    failed_attempts: user.failed_attempts, 
+                    last_ip: user.last_ip.unwrap_or_default(),
+                    last_login: user.last_login.unwrap_or(0),
+                    failed_attempts: user.failed_attempts,
                 }))
             }
-            Ok(None) => {
-                Ok(Response::new(PlayerInfoResponse {
-                    exists: false,
-                    username: req.target_username,
-                    is_banned: false,
-                    has_2fa: false,
-                    last_ip: "".into(),
-                    last_login: 0,
-                    failed_attempts: 0,
-                }))
-            }
+            Ok(None) => Ok(Response::new(PlayerInfoResponse {
+                exists: false,
+                username: req.target_username,
+                is_banned: false,
+                has_2fa: false,
+                last_ip: "".into(),
+                last_login: 0,
+                failed_attempts: 0,
+            })),
             Err(_) => Err(Status::internal("Database error")),
         }
     }
 
-    async fn force_password_change(&self, request: Request<ForcePasswordChangeRequest>) -> Result<Response<ForcePasswordChangeResponse>, Status> {
+    async fn force_password_change(
+        &self,
+        request: Request<ForcePasswordChangeRequest>,
+    ) -> Result<Response<ForcePasswordChangeResponse>, Status> {
         let req = request.into_inner();
         let repo = UserRepository::new(self.db.clone());
-        
+
         match repo.get_user_by_name(&req.target_username).await {
             Ok(Some(user)) => {
                 repo.set_must_change_password(user.id, true).await.ok();
-                
+
                 if req.immediate_kick {
                     let cmd = CoreCommand {
                         r#type: CommandType::KickPlayer as i32,
                         target_username: req.target_username.clone(),
                         payload: "You must change your password. Please re-login.".into(),
                     };
-                    
+
                     let clients_guard = self.clients.read().await;
                     for tx in clients_guard.values() {
                         let _ = tx.send(Ok(cmd.clone())).await;
                     }
                 }
-                Ok(Response::new(ForcePasswordChangeResponse {
-                    success: true,
-                }))
+                Ok(Response::new(ForcePasswordChangeResponse { success: true }))
             }
-            Ok(None) => {
-                Ok(Response::new(ForcePasswordChangeResponse {
-                    success: false,
-                }))
-            }
+            Ok(None) => Ok(Response::new(ForcePasswordChangeResponse {
+                success: false,
+            })),
             Err(_) => Err(Status::internal("Database error")),
         }
     }

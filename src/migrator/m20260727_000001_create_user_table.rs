@@ -18,14 +18,34 @@ impl MigrationTrait for Migration {
                             .auto_increment()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(Users::Username).string().not_null().unique_key())
+                    .col(
+                        ColumnDef::new(Users::Username)
+                            .string()
+                            .not_null()
+                            .unique_key(),
+                    )
                     .col(ColumnDef::new(Users::PasswordHash).string().not_null())
                     .col(ColumnDef::new(Users::LastIp).string())
-                    .col(ColumnDef::new(Users::FailedAttempts).integer().not_null().default(0))
+                    .col(
+                        ColumnDef::new(Users::FailedAttempts)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
                     .col(ColumnDef::new(Users::LastFailedAttempt).big_integer())
                     .col(ColumnDef::new(Users::LastLogin).big_integer())
-                    .col(ColumnDef::new(Users::IsBanned).boolean().not_null().default(false))
-                    .col(ColumnDef::new(Users::MustChangePassword).boolean().not_null().default(false))
+                    .col(
+                        ColumnDef::new(Users::IsBanned)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(Users::MustChangePassword)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
                     .to_owned(),
             )
             .await

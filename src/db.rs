@@ -1,5 +1,5 @@
 use sea_orm::entity::prelude::*;
-use sea_orm::{DatabaseConnection, Set, ActiveModelTrait};
+use sea_orm::{ActiveModelTrait, DatabaseConnection, Set};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "users")]
@@ -186,7 +186,10 @@ impl UserRepository {
     }
 
     pub async fn update_last_login(&self, user_id: i64, ip: &str) -> Result<(), DbErr> {
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
         let update = ActiveModel {
             id: Set(user_id),
             last_ip: Set(Some(ip.to_owned())),
@@ -199,7 +202,10 @@ impl UserRepository {
 
     pub async fn increment_failed_attempts(&self, user_id: i64) -> Result<(), DbErr> {
         if let Some(user) = Entity::find_by_id(user_id).one(&self.db).await? {
-            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64;
             let mut active: ActiveModel = user.into();
             active.failed_attempts = Set(active.failed_attempts.clone().unwrap() + 1);
             active.last_failed_attempt = Set(Some(now));
@@ -267,12 +273,16 @@ impl UserRepository {
         Ok(blacklisted.is_some())
     }
 
-    pub async fn validate_oauth_client(&self, client_id: &str, client_secret: &str) -> Result<bool, DbErr> {
+    pub async fn validate_oauth_client(
+        &self,
+        client_id: &str,
+        client_secret: &str,
+    ) -> Result<bool, DbErr> {
         let client = oauth_clients::Entity::find()
             .filter(oauth_clients::Column::ClientId.eq(client_id))
             .one(&self.db)
             .await?;
-            
+
         if let Some(c) = client {
             // In a real app, client_secret might be hashed. For now, strict string comparison.
             Ok(c.client_secret == client_secret)
@@ -281,14 +291,22 @@ impl UserRepository {
         }
     }
 
-    pub async fn get_oauth_client(&self, client_id: &str) -> Result<Option<oauth_clients::Model>, DbErr> {
+    pub async fn get_oauth_client(
+        &self,
+        client_id: &str,
+    ) -> Result<Option<oauth_clients::Model>, DbErr> {
         oauth_clients::Entity::find()
             .filter(oauth_clients::Column::ClientId.eq(client_id))
             .one(&self.db)
             .await
     }
 
-    pub async fn create_oauth_client(&self, client_id: &str, client_secret: &str, redirect_uris: &str) -> Result<(), DbErr> {
+    pub async fn create_oauth_client(
+        &self,
+        client_id: &str,
+        client_secret: &str,
+        redirect_uris: &str,
+    ) -> Result<(), DbErr> {
         let new_client = oauth_clients::ActiveModel {
             client_id: Set(client_id.to_owned()),
             client_secret: Set(client_secret.to_owned()),
@@ -299,8 +317,17 @@ impl UserRepository {
         Ok(())
     }
 
-    pub async fn create_session(&self, user_id: i64, token: &str, ip: &str, expires_in_sec: i64) -> Result<(), DbErr> {
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+    pub async fn create_session(
+        &self,
+        user_id: i64,
+        token: &str,
+        ip: &str,
+        expires_in_sec: i64,
+    ) -> Result<(), DbErr> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
         let new_session = sessions::ActiveModel {
             user_id: Set(user_id),
             session_token: Set(token.to_owned()),
@@ -322,13 +349,26 @@ impl UserRepository {
 
     pub async fn delete_session(&self, token: &str) -> Result<(), DbErr> {
         if let Some(session) = self.get_session(token).await? {
-            sessions::Entity::delete_by_id(session.id).exec(&self.db).await?;
+            sessions::Entity::delete_by_id(session.id)
+                .exec(&self.db)
+                .await?;
         }
         Ok(())
     }
 
-    pub async fn create_oauth_token(&self, client_id: &str, user_id: i64, access_token: &str, refresh_token: Option<&str>, expires_in_sec: i64, scopes: &str) -> Result<(), DbErr> {
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+    pub async fn create_oauth_token(
+        &self,
+        client_id: &str,
+        user_id: i64,
+        access_token: &str,
+        refresh_token: Option<&str>,
+        expires_in_sec: i64,
+        scopes: &str,
+    ) -> Result<(), DbErr> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
         let new_token = oauth_tokens::ActiveModel {
             client_id: Set(client_id.to_owned()),
             user_id: Set(user_id),
@@ -347,7 +387,7 @@ impl UserRepository {
             .filter(
                 sea_orm::Condition::any()
                     .add(oauth_tokens::Column::AccessToken.eq(token))
-                    .add(oauth_tokens::Column::RefreshToken.eq(token))
+                    .add(oauth_tokens::Column::RefreshToken.eq(token)),
             )
             .one(&self.db)
             .await
@@ -355,7 +395,9 @@ impl UserRepository {
 
     pub async fn delete_oauth_token(&self, token: &str) -> Result<(), DbErr> {
         if let Some(model) = self.get_oauth_token(token).await? {
-            oauth_tokens::Entity::delete_by_id(model.id).exec(&self.db).await?;
+            oauth_tokens::Entity::delete_by_id(model.id)
+                .exec(&self.db)
+                .await?;
         }
         Ok(())
     }
@@ -364,16 +406,16 @@ impl UserRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sea_orm::{Database, Schema, ConnectionTrait};
+    use sea_orm::{ConnectionTrait, Database, Schema};
 
     async fn setup_test_db() -> DatabaseConnection {
         let db = Database::connect("sqlite::memory:").await.unwrap();
         let builder = db.get_database_backend();
         let schema = Schema::new(builder);
-        
+
         let stmt = schema.create_table_from_entity(oauth_clients::Entity);
         db.execute(builder.build(&stmt)).await.unwrap();
-        
+
         db
     }
 
@@ -383,33 +425,46 @@ mod tests {
         let repo = UserRepository::new(db);
 
         // Test creating client
-        let result = repo.create_oauth_client("client_123", "secret_456", "http://localhost/callback").await;
+        let result = repo
+            .create_oauth_client("client_123", "secret_456", "http://localhost/callback")
+            .await;
         assert!(result.is_ok(), "Failed to create OAuth client");
-        
+
         // Test fetching client
         let client = repo.get_oauth_client("client_123").await.unwrap();
         assert!(client.is_some(), "Client not found");
-        
+
         let client = client.unwrap();
         assert_eq!(client.client_id, "client_123");
         assert_eq!(client.client_secret, "secret_456");
         assert_eq!(client.redirect_uris, "http://localhost/callback");
     }
-    
+
     #[tokio::test]
     async fn test_validate_oauth_client() {
         let db = setup_test_db().await;
         let repo = UserRepository::new(db);
 
-        repo.create_oauth_client("client_123", "secret_456", "http://localhost/callback").await.unwrap();
-        
-        let is_valid = repo.validate_oauth_client("client_123", "secret_456").await.unwrap();
+        repo.create_oauth_client("client_123", "secret_456", "http://localhost/callback")
+            .await
+            .unwrap();
+
+        let is_valid = repo
+            .validate_oauth_client("client_123", "secret_456")
+            .await
+            .unwrap();
         assert!(is_valid, "Valid credentials should return true");
-        
-        let is_invalid = repo.validate_oauth_client("client_123", "wrong_secret").await.unwrap();
+
+        let is_invalid = repo
+            .validate_oauth_client("client_123", "wrong_secret")
+            .await
+            .unwrap();
         assert!(!is_invalid, "Invalid credentials should return false");
-        
-        let is_non_existent = repo.validate_oauth_client("non_existent", "secret_456").await.unwrap();
+
+        let is_non_existent = repo
+            .validate_oauth_client("non_existent", "secret_456")
+            .await
+            .unwrap();
         assert!(!is_non_existent, "Non-existent client should return false");
     }
 }

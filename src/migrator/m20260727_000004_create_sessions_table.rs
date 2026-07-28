@@ -1,5 +1,5 @@
-use sea_orm_migration::prelude::*;
 use super::m20260727_000001_create_user_table::Users;
+use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -20,7 +20,12 @@ impl MigrationTrait for Migration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(Sessions::UserId).big_integer().not_null())
-                    .col(ColumnDef::new(Sessions::SessionToken).string().not_null().unique_key())
+                    .col(
+                        ColumnDef::new(Sessions::SessionToken)
+                            .string()
+                            .not_null()
+                            .unique_key(),
+                    )
                     .col(ColumnDef::new(Sessions::IpAddress).string().not_null())
                     .col(ColumnDef::new(Sessions::CreatedAt).big_integer().not_null())
                     .col(ColumnDef::new(Sessions::ExpiresAt).big_integer().not_null())
