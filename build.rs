@@ -1,7 +1,7 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tonic_build::configure()
+    tonic_prost_build::configure()
         .build_server(true)
         .build_client(false)
-        .compile(&["proto/xauth.proto"], &["proto"])?;
+        .compile_protos(&["proto/xauth.proto"], &["proto"])?;
     Ok(())
 }
