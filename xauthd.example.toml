@@ -15,6 +15,12 @@ grpc_address = "0.0.0.0:50051"
 # Address and port for the Web HTTP server (OAuth2, OIDC, web dashboard)
 web_address = "0.0.0.0:8080"
 
+[web]
+# Path to the directory containing HTML templates (Jinja2 syntax).
+# Server owners can freely edit these files to customize the look and feel.
+# Changes are picked up on the next page load — no restart required.
+templates_dir = "./templates"
+
 [password_hashing]
 # Available algorithms: BCRYPT, ARGON2ID
 algorithm = "BCRYPT"
