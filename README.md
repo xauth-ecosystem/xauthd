@@ -18,6 +18,7 @@ Create a configuration file from the template:
 ```bash
 cp xauthd.example.toml xauthd.toml
 ```
+
 Configure your database connection, password hashing algorithm, and `[auth_flow]` chains.
 
 ### 2. Running
@@ -26,6 +27,7 @@ To compile and run the development build:
 ```bash
 cargo run
 ```
+
 To build the optimized release version for production:
 ```bash
 cargo build --release
@@ -39,6 +41,7 @@ In `xauthd.toml`, you can flexibly define the sequence of steps for players:
 register_chain = ["captcha", "register"]
 login_chain = ["password", "totp"]
 ```
+
 The `xauthd` core natively handles security-critical steps (`password`, `register`, `totp`). Any custom steps, such as `captcha` or `send-gift`, are automatically delegated to your PocketMine plugin. The plugin must execute the step on the client side and return a `{step_name}_complete` gRPC signal to allow the player to proceed.
 
 ## Contributing
