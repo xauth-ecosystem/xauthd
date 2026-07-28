@@ -12,6 +12,7 @@ pub struct Model {
     pub last_ip: Option<String>,
     pub last_login: Option<i64>,
     pub failed_attempts: i32,
+    pub last_failed_attempt: Option<i64>,
     pub is_banned: bool,
     pub must_change_password: bool,
 }
@@ -198,8 +199,10 @@ impl UserRepository {
 
     pub async fn increment_failed_attempts(&self, user_id: i64) -> Result<(), DbErr> {
         if let Some(user) = Entity::find_by_id(user_id).one(&self.db).await? {
+            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
             let mut active: ActiveModel = user.into();
             active.failed_attempts = Set(active.failed_attempts.clone().unwrap() + 1);
+            active.last_failed_attempt = Set(Some(now));
             active.update(&self.db).await?;
         }
         Ok(())
