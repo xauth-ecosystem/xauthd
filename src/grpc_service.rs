@@ -596,4 +596,60 @@ mod tests {
         assert_eq!(resp.username, "known_user");
         assert!(resp.is_banned);
     }
+
+    #[tokio::test]
+    async fn test_process_auth_step_init_register() {
+        let db = setup_test_db().await;
+        let settings = get_test_settings();
+        let service = XAuthCoreService::new(db, settings);
+
+        let req = Request::new(AuthStepRequest {
+            username: "new_player".into(),
+            step_type: "init".into(),
+            input_data: "".into(),
+            ip_address: "127.0.0.1".into(),
+            flow_token: "".into(),
+            server_id: "test_server".into(),
+        });
+
+        let resp = service.process_auth_step(req).await.unwrap().into_inner();
+
+        assert!(resp.success);
+        assert_eq!(resp.next_action, "require_password");
+        assert!(!resp.flow_token.is_empty());
+        assert!(resp.session_token.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_process_auth_step_init_login() {
+        let db = setup_test_db().await;
+
+        let new_user = crate::db::ActiveModel {
+            username: Set("existing_player".into()),
+            password_hash: Set("hash".into()),
+            failed_attempts: Set(0),
+            is_banned: Set(false),
+            must_change_password: Set(false),
+            ..Default::default()
+        };
+        new_user.insert(&db).await.unwrap();
+
+        let settings = get_test_settings();
+        let service = XAuthCoreService::new(db, settings);
+
+        let req = Request::new(AuthStepRequest {
+            username: "existing_player".into(),
+            step_type: "init".into(),
+            input_data: "".into(),
+            ip_address: "127.0.0.1".into(),
+            flow_token: "".into(),
+            server_id: "test_server".into(),
+        });
+
+        let resp = service.process_auth_step(req).await.unwrap().into_inner();
+
+        assert!(resp.success);
+        assert_eq!(resp.next_action, "require_password");
+        assert!(!resp.flow_token.is_empty());
+    }
 }
