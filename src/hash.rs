@@ -27,7 +27,7 @@ pub fn hash_password(password: &str, config: &PasswordHashingSettings) -> Result
                     argon_opts.threads,
                     None,
                 )
-                .unwrap_or(Params::default());
+                .unwrap_or_default();
                 Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params)
             } else {
                 Argon2::default()

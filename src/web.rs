@@ -225,8 +225,7 @@ fn get_username_from_cookie(headers: &axum::http::HeaderMap, state: &AppState) -
         if let Ok(cookie_str) = cookie_val.to_str() {
             for part in cookie_str.split(';') {
                 let part = part.trim();
-                if part.starts_with("session_token=") {
-                    let token = &part["session_token=".len()..];
+                if let Some(token) = part.strip_prefix("session_token=") {
                     if let Ok(claims) = crate::jwt::validate_jwt(token, &state.settings.jwt.secret)
                     {
                         return claims.sub;
@@ -427,8 +426,7 @@ async fn user_get(
     let repo = UserRepository::new(state.db.clone());
     if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
         if let Ok(auth_str) = auth_header.to_str() {
-            if auth_str.starts_with("Bearer ") {
-                let token = &auth_str["Bearer ".len()..];
+            if let Some(token) = auth_str.strip_prefix("Bearer ") {
                 if let Ok(claims) = crate::jwt::validate_jwt(token, &state.settings.jwt.secret) {
                     if !repo
                         .is_token_blacklisted(&claims.jti)

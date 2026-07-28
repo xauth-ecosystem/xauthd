@@ -186,8 +186,8 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                     rand::rng().fill_bytes(&mut id_bytes);
                     rand::rng().fill_bytes(&mut secret_bytes);
 
-                    let client_id = URL_SAFE_NO_PAD.encode(&id_bytes);
-                    let client_secret = URL_SAFE_NO_PAD.encode(&secret_bytes);
+                    let client_id = URL_SAFE_NO_PAD.encode(id_bytes);
+                    let client_secret = URL_SAFE_NO_PAD.encode(secret_bytes);
 
                     repo.create_oauth_client(&client_id, &client_secret, redirect_uri)
                         .await?;
