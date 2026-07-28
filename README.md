@@ -33,6 +33,27 @@ To build the optimized release version for production:
 cargo build --release
 ```
 
+## CLI Commands
+
+`xauthd` is a full-fledged CLI application. You can use the `--help` flag at any time to see the available commands:
+
+```text
+Usage: xauth-core <COMMAND>
+
+Commands:
+  start         Starts the XAuth Core Daemon (gRPC and Web servers)
+  migrate       Manually applies database migrations
+  config-check  Checks the xauthd.toml configuration for errors
+  admin         Administrative commands
+  help          Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+```
+
+Administrative commands are grouped under the `admin` subcommand (e.g., `xauth-core admin --help`).
+
 ## Authentication Chains (Auth Flow)
 
 In `xauthd.toml`, you can flexibly define the sequence of steps for players:
