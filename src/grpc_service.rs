@@ -524,9 +524,7 @@ mod tests {
 
     fn get_test_settings() -> Arc<Settings> {
         Arc::new(Settings {
-            database: DatabaseSettings {
-                url: "".into(),
-            },
+            database: DatabaseSettings { url: "".into() },
             network: NetworkSettings {
                 grpc_address: "".into(),
                 web_address: "".into(),
