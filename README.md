@@ -54,6 +54,14 @@ Options:
 
 Administrative commands are grouped under the `admin` subcommand (e.g., `xauth-core admin --help`).
 
+### Daemon Mode (Background)
+
+By default, `start` runs the server in the foreground. If you are not using `systemd` and want the process to detach and run in the background as a classic daemon, pass the `-d` or `--daemon` flag:
+```bash
+./xauth-core start -d
+```
+Logs will be written to `xauthd.out` and `xauthd.err` in the current directory.
+
 ## Authentication Chains (Auth Flow)
 
 In `xauthd.toml`, you can flexibly define the sequence of steps for players:
