@@ -32,7 +32,10 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Starts the XAuth Core Daemon (gRPC and Web servers)
-    Start,
+    Start {
+        #[arg(short, long)]
+        daemon: bool,
+    },
     /// Manually applies database migrations
     Migrate,
     /// Checks the xauthd.toml configuration for errors
@@ -57,14 +60,38 @@ enum AdminCommands {
     },
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt::init();
-    
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
+    if let Commands::Start { daemon } = &cli.command {
+        if *daemon {
+            let stdout = std::fs::File::create("xauthd.out")?;
+            let stderr = std::fs::File::create("xauthd.err")?;
+            
+            let daemonize = daemonize::Daemonize::new()
+                .working_directory(std::env::current_dir()?)
+                .stdout(stdout)
+                .stderr(stderr);
+                
+            match daemonize.start() {
+                Ok(_) => println!("Successfully daemonized! Running in background."),
+                Err(e) => {
+                    eprintln!("Error daemonizing: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+    }
+
+    tracing_subscriber::fmt::init();
+    
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(async_main(cli))
+}
+
+async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     match &cli.command {
-        Commands::Start => {
+        Commands::Start { .. } => {
             info!("Starting XAuth Core Daemon...");
 
             let settings = config::Settings::new().unwrap_or_else(|err| {
