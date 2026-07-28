@@ -141,25 +141,25 @@ Output structure:
 
 ```
 gen/php/
-├── ChernegaSergiy/XAuth/Grpc/
-│   ├── AuthServiceClient.php
-│   ├── AuthStepRequest.php
-│   ├── AuthStepResponse.php
-│   ├── SessionRequest.php
-│   ├── SessionResponse.php
-│   ├── EndSessionRequest.php
-│   ├── EndSessionResponse.php
-│   ├── PluginEvent.php
-│   ├── CoreCommand.php
-│   ├── OAuthTokenRequest.php
-│   ├── OAuthTokenResponse.php
-│   ├── OAuthRevokeRequest.php
-│   ├── OAuthRevokeResponse.php
-│   ├── PlayerInfoRequest.php
-│   ├── PlayerInfoResponse.php
-│   ├── ForcePasswordChangeRequest.php
-│   └── ForcePasswordChangeResponse.php
-└── GPBMetadata/Xauth.php
++-- ChernegaSergiy/XAuth/Grpc/
+|   +-- AuthServiceClient.php         # gRPC client stub
+|   +-- AuthStepRequest.php
+|   +-- AuthStepResponse.php
+|   +-- SessionRequest.php
+|   +-- SessionResponse.php
+|   +-- EndSessionRequest.php
+|   +-- EndSessionResponse.php
+|   +-- PluginEvent.php
+|   +-- CoreCommand.php
+|   +-- OAuthTokenRequest.php
+|   +-- OAuthTokenResponse.php
+|   +-- OAuthRevokeRequest.php
+|   +-- OAuthRevokeResponse.php
+|   +-- PlayerInfoRequest.php
+|   +-- PlayerInfoResponse.php
+|   +-- ForcePasswordChangeRequest.php
+|   \-- ForcePasswordChangeResponse.php
+\-- GPBMetadata/Xauth.php
 ```
 
 ### Usage
@@ -218,38 +218,38 @@ Output structure:
 
 ```
 gen/java/com/chernegasergiy/xauth/grpc/
-├── AuthServiceGrpc.java              ← gRPC service stub
-├── AuthStepRequest.java
-├── AuthStepRequestOrBuilder.java
-├── AuthStepResponse.java
-├── AuthStepResponseOrBuilder.java
-├── SessionRequest.java
-├── SessionRequestOrBuilder.java
-├── SessionResponse.java
-├── SessionResponseOrBuilder.java
-├── EndSessionRequest.java
-├── EndSessionRequestOrBuilder.java
-├── EndSessionResponse.java
-├── EndSessionResponseOrBuilder.java
-├── PluginEvent.java
-├── PluginEventOrBuilder.java
-├── CoreCommand.java
-├── CoreCommandOrBuilder.java
-├── OAuthTokenRequest.java
-├── OAuthTokenRequestOrBuilder.java
-├── OAuthTokenResponse.java
-├── OAuthTokenResponseOrBuilder.java
-├── OAuthRevokeRequest.java
-├── OAuthRevokeRequestOrBuilder.java
-├── PlayerInfoRequest.java
-├── PlayerInfoRequestOrBuilder.java
-├── PlayerInfoResponse.java
-├── PlayerInfoResponseOrBuilder.java
-├── ForcePasswordChangeRequest.java
-├── ForcePasswordChangeRequestOrBuilder.java
-├── ForcePasswordChangeResponse.java
-├── ForcePasswordChangeResponseOrBuilder.java
-└── XAuthProto.java
++-- AuthServiceGrpc.java              # gRPC service stub
++-- AuthStepRequest.java
++-- AuthStepRequestOrBuilder.java
++-- AuthStepResponse.java
++-- AuthStepResponseOrBuilder.java
++-- SessionRequest.java
++-- SessionRequestOrBuilder.java
++-- SessionResponse.java
++-- SessionResponseOrBuilder.java
++-- EndSessionRequest.java
++-- EndSessionRequestOrBuilder.java
++-- EndSessionResponse.java
++-- EndSessionResponseOrBuilder.java
++-- PluginEvent.java
++-- PluginEventOrBuilder.java
++-- CoreCommand.java
++-- CoreCommandOrBuilder.java
++-- OAuthTokenRequest.java
++-- OAuthTokenRequestOrBuilder.java
++-- OAuthTokenResponse.java
++-- OAuthTokenResponseOrBuilder.java
++-- OAuthRevokeRequest.java
++-- OAuthRevokeRequestOrBuilder.java
++-- PlayerInfoRequest.java
++-- PlayerInfoRequestOrBuilder.java
++-- PlayerInfoResponse.java
++-- PlayerInfoResponseOrBuilder.java
++-- ForcePasswordChangeRequest.java
++-- ForcePasswordChangeRequestOrBuilder.java
++-- ForcePasswordChangeResponse.java
++-- ForcePasswordChangeResponseOrBuilder.java
+\-- XAuthProto.java
 ```
 
 ### Usage
