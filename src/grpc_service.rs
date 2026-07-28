@@ -112,11 +112,19 @@ impl AuthService for XAuthCoreService {
         match current_step.as_str() {
             "password" => {
                 if req.step_type == "password" {
-                    let user = match repo.get_user_by_name(&req.username).await {
+                    let mut user = match repo.get_user_by_name(&req.username).await {
                         Ok(Some(u)) => u,
                         _ => return Err(Status::unauthenticated("User not found")),
                     };
                     
+                    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+                    if let Some(last_failed) = user.last_failed_attempt {
+                        if now - last_failed > self.settings.security.failed_attempts_reset_interval {
+                            repo.reset_failed_attempts(user.id).await.ok();
+                            user.failed_attempts = 0;
+                        }
+                    }
+
                     if user.failed_attempts >= self.settings.security.max_failed_attempts {
                         return Err(Status::permission_denied("Too many failed attempts. Account locked."));
                     }
