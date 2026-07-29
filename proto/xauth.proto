@@ -67,10 +67,12 @@ message PluginEvent {
         PLAYER_JOIN = 2;
         PLAYER_QUIT = 3;
         STATE_UPDATE = 4;
+        SCOPE_DATA_RESPONSE = 5;
     }
     EventType type = 2;
     string username = 3;
     string ip_address = 4;
+    string payload = 5;
 }
 
 message CoreCommand {
@@ -79,6 +81,7 @@ message CoreCommand {
         SEND_MESSAGE = 1;
         FORCE_STATE_SYNC = 2;
         REQUIRE_REAUTH = 3;
+        FETCH_SCOPES = 4;
     }
     CommandType type = 1;
     string target_username = 2;
