@@ -835,4 +835,37 @@ mod tests {
         assert_eq!(err.code(), tonic::Code::PermissionDenied);
         assert!(err.message().contains("locked"));
     }
+
+    #[tokio::test]
+    async fn test_process_auth_step_register_success() {
+        let db = setup_test_db().await;
+        let settings = Arc::new(Settings {
+            auth_flow: AuthFlowSettings {
+                register_chain: vec!["register".into()],
+                ..get_test_settings().auth_flow.clone()
+            },
+            ..get_test_settings().as_ref().clone()
+        });
+        let service = XAuthCoreService::new(db, settings.clone());
+
+        let flow_token =
+            crate::jwt::generate_flow_token("new_player", "register", 0, &settings.jwt.secret, 600)
+                .unwrap();
+
+        let req = Request::new(AuthStepRequest {
+            username: "new_player".into(),
+            step_type: "register".into(),
+            input_data: "my_password".into(),
+            ip_address: "127.0.0.1".into(),
+            flow_token,
+            server_id: "test_server".into(),
+        });
+
+        let resp = service.process_auth_step(req).await.unwrap().into_inner();
+        assert!(resp.success);
+        assert_eq!(resp.message, "Successfully authenticated!");
+        assert_eq!(resp.next_action, "authenticated");
+        assert!(!resp.session_token.is_empty());
+        assert!(resp.flow_token.is_empty());
+    }
 }
