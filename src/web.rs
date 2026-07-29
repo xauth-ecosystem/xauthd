@@ -25,6 +25,7 @@ fn render_template(
 struct LoginQuery {
     client_id: Option<String>,
     redirect_uri: Option<String>,
+    scope: Option<String>,
     state: Option<String>,
     error: Option<String>,
     code_challenge: Option<String>,
@@ -38,6 +39,7 @@ struct LoginForm {
     password: String,
     client_id: Option<String>,
     redirect_uri: Option<String>,
+    scope: Option<String>,
     state: Option<String>,
     code_challenge: Option<String>,
     code_challenge_method: Option<String>,
@@ -49,6 +51,7 @@ struct ConsentForm {
     action: String,
     client_id: String,
     redirect_uri: String,
+    scope: String,
     state: String,
     code_challenge: Option<String>,
     code_challenge_method: Option<String>,
