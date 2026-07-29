@@ -686,6 +686,15 @@ async fn introspect_post(
                 .as_ref()
                 .map(|t| t.client_id.clone())
                 .unwrap_or_default();
+            let token_type = if oauth_token
+                .as_ref()
+                .map(|t| t.refresh_token.as_deref() == Some(&req.token))
+                .unwrap_or(false)
+            {
+                "refresh_token"
+            } else {
+                "Bearer"
+            };
             return (
                 axum::http::StatusCode::OK,
                 Json(serde_json::json!({
@@ -696,7 +705,7 @@ async fn introspect_post(
                     "iat": claims.iat,
                     "scope": scope,
                     "client_id": client_id,
-                    "token_type": "Bearer"
+                    "token_type": token_type
                 })),
             )
                 .into_response();
