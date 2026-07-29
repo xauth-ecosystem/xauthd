@@ -78,6 +78,7 @@ struct TokenRequest {
 #[derive(Deserialize)]
 struct IntrospectRequest {
     token: String,
+    token_type_hint: Option<String>,
     client_id: String,
     client_secret: String,
 }
@@ -85,6 +86,7 @@ struct IntrospectRequest {
 #[derive(Deserialize)]
 struct RevokeRequest {
     token: String,
+    token_type_hint: Option<String>,
     client_id: String,
     client_secret: String,
 }
