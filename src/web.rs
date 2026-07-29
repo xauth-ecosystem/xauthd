@@ -700,7 +700,8 @@ async fn introspect_post(
                     "exp": claims.exp,
                     "iat": claims.iat,
                     "scope": scope,
-                    "client_id": client_id
+                    "client_id": client_id,
+                    "token_type": "Bearer"
                 })),
             )
                 .into_response();
