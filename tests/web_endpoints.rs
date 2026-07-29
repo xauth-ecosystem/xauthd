@@ -4,7 +4,11 @@ use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use common::{get_test_settings, setup_test_db};
+use sea_orm::DatabaseConnection;
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use tower::util::ServiceExt;
 use xauth_core::db::UserRepository;
 use xauth_core::web::router;
@@ -32,11 +36,20 @@ fn build_auth_code(
         .unwrap()
 }
 
+fn build_test_router(
+    db: DatabaseConnection,
+    settings: Arc<xauth_core::config::Settings>,
+) -> axum::Router {
+    let grpc_clients = Arc::new(RwLock::new(HashMap::new()));
+    let pending_scopes = Arc::new(RwLock::new(HashMap::new()));
+    router(db, settings, grpc_clients, pending_scopes)
+}
+
 #[tokio::test]
 async fn test_discovery_get() {
     let db = setup_test_db().await;
     let settings = get_test_settings();
-    let app = router(db, settings);
+    let app = build_test_router(db, settings);
     let req = Request::builder()
         .method("GET")
         .uri("/.well-known/openid-configuration")
@@ -55,7 +68,7 @@ async fn test_discovery_get() {
 async fn test_jwks_get() {
     let db = setup_test_db().await;
     let settings = get_test_settings();
-    let app = router(db, settings);
+    let app = build_test_router(db, settings);
     let req = Request::builder()
         .method("GET")
         .uri("/jwks")
@@ -96,7 +109,7 @@ async fn test_token_post_authorization_code_success() {
         "test_nonce",
     );
 
-    let app = router(db, settings.clone());
+    let app = build_test_router(db, settings.clone());
     let req = Request::builder()
         .method("POST")
         .uri("/token")
@@ -134,7 +147,7 @@ async fn test_token_post_authorization_code_invalid_client() {
         "",
     );
 
-    let app = router(db, settings);
+    let app = build_test_router(db, settings);
     let req = Request::builder()
         .method("POST")
         .uri("/token")
@@ -162,7 +175,7 @@ async fn test_token_post_authorization_code_invalid_code() {
         .await
         .unwrap();
 
-    let app = router(db, settings);
+    let app = build_test_router(db, settings);
     let req = Request::builder()
         .method("POST")
         .uri("/token")
@@ -213,7 +226,7 @@ async fn test_token_post_refresh_token_success() {
     .await
     .unwrap();
 
-    let app = router(db, settings);
+    let app = build_test_router(db, settings);
     let req = Request::builder()
         .method("POST")
         .uri("/token")
@@ -238,7 +251,7 @@ async fn test_token_post_refresh_token_success() {
 async fn test_token_post_refresh_token_invalid_client() {
     let db = setup_test_db().await;
     let settings = get_test_settings();
-    let app = router(db, settings);
+    let app = build_test_router(db, settings);
     let req = Request::builder()
         .method("POST")
         .uri("/token")
@@ -264,7 +277,7 @@ async fn test_token_post_refresh_token_invalid_grant() {
         .await
         .unwrap();
 
-    let app = router(db, settings);
+    let app = build_test_router(db, settings);
     let req = Request::builder()
         .method("POST")
         .uri("/token")
@@ -290,7 +303,7 @@ async fn test_token_post_unsupported_grant_type() {
         .await
         .unwrap();
 
-    let app = router(db, settings);
+    let app = build_test_router(db, settings);
     let req = Request::builder()
         .method("POST")
         .uri("/token")
@@ -335,7 +348,7 @@ async fn test_introspect_post_active() {
     .await
     .unwrap();
 
-    let app = router(db, settings);
+    let app = build_test_router(db, settings);
     let req = Request::builder()
         .method("POST")
         .uri("/introspect")
@@ -366,7 +379,7 @@ async fn test_introspect_post_inactive() {
         .await
         .unwrap();
 
-    let app = router(db, settings);
+    let app = build_test_router(db, settings);
     let req = Request::builder()
         .method("POST")
         .uri("/introspect")
@@ -387,7 +400,7 @@ async fn test_introspect_post_inactive() {
 async fn test_introspect_post_invalid_client() {
     let db = setup_test_db().await;
     let settings = get_test_settings();
-    let app = router(db, settings);
+    let app = build_test_router(db, settings);
     let req = Request::builder()
         .method("POST")
         .uri("/introspect")
@@ -432,7 +445,7 @@ async fn test_revoke_post_success() {
     .await
     .unwrap();
 
-    let app = router(db.clone(), settings.clone());
+    let app = build_test_router(db.clone(), settings.clone());
     let req = Request::builder()
         .method("POST")
         .uri("/revoke")
@@ -455,7 +468,7 @@ async fn test_revoke_post_success() {
 async fn test_revoke_post_invalid_client() {
     let db = setup_test_db().await;
     let settings = get_test_settings();
-    let app = router(db, settings);
+    let app = build_test_router(db, settings);
     let req = Request::builder()
         .method("POST")
         .uri("/revoke")
@@ -483,7 +496,7 @@ async fn test_user_get_success() {
     )
     .unwrap();
 
-    let app = router(db, settings);
+    let app = build_test_router(db, settings);
     let req = Request::builder()
         .method("GET")
         .uri("/user")
@@ -504,7 +517,7 @@ async fn test_user_get_success() {
 async fn test_user_get_missing_token() {
     let db = setup_test_db().await;
     let settings = get_test_settings();
-    let app = router(db, settings);
+    let app = build_test_router(db, settings);
     let req = Request::builder()
         .method("GET")
         .uri("/user")
