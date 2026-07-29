@@ -175,8 +175,8 @@ Place CSS, JS, images, or fonts in the `public_dir` directory. They are served u
 
 ```
 public/
-├── styles.css
-└── logo.png
++-- styles.css
+\-- logo.png
 ```
 
 Reference them in your templates:
