@@ -211,7 +211,7 @@ impl AuthService for XAuthCoreService {
                     let otpauth_uri = format!(
                         "otpauth://totp/{}:{}?secret={}&issuer={}",
                         "xauthd",
-                        &req.username,
+                        req.username,
                         totp.get_secret_base32(),
                         "xauthd"
                     );
