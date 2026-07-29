@@ -914,4 +914,42 @@ mod tests {
         assert!(!resp.success);
         assert_eq!(resp.message, "User already exists!");
     }
+
+    #[tokio::test]
+    async fn test_process_auth_step_totp_skip() {
+        let db = setup_test_db().await;
+        let settings = get_test_settings();
+
+        let new_user = crate::db::ActiveModel {
+            username: Set("player_no_2fa".into()),
+            password_hash: Set("hash".into()),
+            failed_attempts: Set(0),
+            is_banned: Set(false),
+            must_change_password: Set(false),
+            ..Default::default()
+        };
+        new_user.insert(&db).await.unwrap();
+
+        let service = XAuthCoreService::new(db, settings.clone());
+
+        let flow_token =
+            crate::jwt::generate_flow_token("player_no_2fa", "login", 1, &settings.jwt.secret, 600)
+                .unwrap();
+
+        let req = Request::new(AuthStepRequest {
+            username: "player_no_2fa".into(),
+            step_type: "totp".into(),
+            input_data: "".into(),
+            ip_address: "127.0.0.1".into(),
+            flow_token,
+            server_id: "test_server".into(),
+        });
+
+        let resp = service.process_auth_step(req).await.unwrap().into_inner();
+        assert!(resp.success);
+        assert_eq!(resp.message, "Successfully authenticated!");
+        assert_eq!(resp.next_action, "authenticated");
+        assert!(!resp.session_token.is_empty());
+        assert!(resp.flow_token.is_empty());
+    }
 }
