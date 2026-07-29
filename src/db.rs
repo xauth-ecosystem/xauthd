@@ -453,6 +453,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_set_totp_secret() {
+        let db = setup_test_db().await;
+        let repo = UserRepository::new(db);
+
+        repo.create_user("totp_user", "hash").await.unwrap();
+        let user = repo.get_user_by_name("totp_user").await.unwrap().unwrap();
+
+        assert!(!repo.is_2fa_enabled(user.id).await.unwrap());
+
+        repo.set_totp_secret(user.id, "JBSWY3DPEHPK3PXP")
+            .await
+            .unwrap();
+
+        let user = repo.get_user_by_name("totp_user").await.unwrap().unwrap();
+        assert!(repo.is_2fa_enabled(user.id).await.unwrap());
+        assert_eq!(user.totp_secret.unwrap(), "JBSWY3DPEHPK3PXP");
+    }
+
+    #[tokio::test]
     async fn test_validate_oauth_client() {
         let db = setup_test_db().await;
         let repo = UserRepository::new(db);
