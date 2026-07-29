@@ -3,7 +3,7 @@ use axum::{
     response::IntoResponse,
 };
 use crate::db::UserRepository;
-use super::{dto::{ConsentForm, LoginQuery}, state::AppState, templates::{get_username_from_cookie, render_template}};
+use crate::transport::web::{dto::{ConsentForm, LoginQuery}, state::AppState, templates::{get_username_from_cookie, render_template}};
 
 pub async fn consent_get(
     headers: axum::http::HeaderMap,
