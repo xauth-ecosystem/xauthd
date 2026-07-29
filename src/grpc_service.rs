@@ -99,280 +99,50 @@ impl AuthService for XAuthCoreService {
         request: Request<AuthStepRequest>,
     ) -> Result<Response<AuthStepResponse>, Status> {
         let req = request.into_inner();
-        let repo = UserRepository::new(self.db.clone());
+        let auth_flow = crate::services::auth_flow::AuthFlowService::new(
+            UserRepository::new(self.db.clone()),
+            self.settings.clone(),
+        );
 
-        let mut step_index = 0;
-        let chain_name;
-
-        if req.step_type == "init" {
-            let user_exists = repo
-                .get_user_by_name(&req.username)
-                .await
-                .unwrap_or(None)
-                .is_some();
-            chain_name = if user_exists {
-                "login".to_string()
-            } else {
-                "register".to_string()
-            };
-        } else {
-            if req.flow_token.is_empty() {
-                return Err(Status::unauthenticated("Missing flow_token"));
-            }
-            let claims =
-                match crate::jwt::validate_flow_token(&req.flow_token, &self.settings.jwt.secret) {
-                    Ok(c) => c,
-                    Err(_) => return Err(Status::unauthenticated("Invalid or expired flow_token")),
-                };
-            if claims.sub != req.username {
-                return Err(Status::unauthenticated("Token username mismatch"));
-            }
-            step_index = claims.step_index;
-            chain_name = claims.chain;
-        }
-
-        let chain = if chain_name == "login" {
-            &self.settings.auth_flow.login_chain
-        } else {
-            &self.settings.auth_flow.register_chain
+        let input = crate::services::auth_flow::AuthStepInput {
+            username: req.username.clone(),
+            step_type: req.step_type.clone(),
+            input_data: req.input_data.clone(),
+            flow_token: req.flow_token.clone(),
+            ip_address: req.ip_address.clone(),
         };
 
-        if step_index >= chain.len() {
-            return Err(Status::internal("Auth flow exceeded"));
-        }
-
-        let current_step = &chain[step_index];
-
-        if req.step_type == "init" && current_step.as_str() != "totp" {
-            let new_flow_token = crate::jwt::generate_flow_token(
-                &req.username,
-                &chain_name,
-                step_index,
-                &self.settings.jwt.secret,
-                600,
-            )
-            .map_err(|_| Status::internal("Token failed"))?;
-            return Ok(Response::new(AuthStepResponse {
+        match auth_flow.process_step(input).await {
+            Ok(result) => Ok(Response::new(AuthStepResponse {
+                success: result.success,
+                message: result.message,
+                next_action: result.next_action,
+                session_token: result.session_token,
+                flow_token: result.flow_token,
+            })),
+            Err(crate::services::auth_flow::AuthFlowError::Unauthenticated(msg)) => {
+                Err(Status::unauthenticated(msg))
+            }
+            Err(crate::services::auth_flow::AuthFlowError::PermissionDenied(msg)) => {
+                Err(Status::permission_denied(msg))
+            }
+            Err(crate::services::auth_flow::AuthFlowError::Internal(msg)) => {
+                Err(Status::internal(msg))
+            }
+            Err(crate::services::auth_flow::AuthFlowError::Fail(msg)) => {
+                Err(Status::failed_precondition(msg))
+            }
+            Err(crate::services::auth_flow::AuthFlowError::TotpInit {
+                otpauth_uri,
+                flow_token,
+            }) => Ok(Response::new(AuthStepResponse {
                 success: true,
-                message: String::new(),
-                next_action: format!("require_{}", current_step),
-                session_token: "".into(),
-                flow_token: new_flow_token,
-            }));
+                message: otpauth_uri,
+                next_action: "require_totp".into(),
+                session_token: String::new(),
+                flow_token,
+            })),
         }
-
-        let result = match current_step.as_str() {
-            "password" => {
-                let mut user = match repo.get_user_by_name(&req.username).await {
-                    Ok(Some(u)) => u,
-                    _ => return Err(Status::unauthenticated("User not found")),
-                };
-
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs() as i64;
-                if let Some(last_failed) = user.last_failed_attempt {
-                    if now - last_failed > self.settings.security.failed_attempts_reset_interval {
-                        repo.reset_failed_attempts(user.id).await.ok();
-                        user.failed_attempts = 0;
-                    }
-                }
-
-                if user.failed_attempts >= self.settings.security.max_failed_attempts {
-                    return Err(Status::permission_denied(
-                        "Too many failed attempts. Account locked.",
-                    ));
-                }
-
-                if crate::hash::verify_password(&req.input_data, &user.password_hash) {
-                    repo.reset_failed_attempts(user.id).await.ok();
-                    StepResult::Ok
-                } else {
-                    repo.increment_failed_attempts(user.id).await.ok();
-                    StepResult::Fail("Invalid password!".into())
-                }
-            }
-            "register" => {
-                let hash =
-                    crate::hash::hash_password(&req.input_data, &self.settings.password_hashing)
-                        .map_err(|_| Status::internal("Hash failed"))?;
-                if repo.create_user(&req.username, &hash).await.is_ok() {
-                    StepResult::Ok
-                } else {
-                    StepResult::Fail("User already exists!".into())
-                }
-            }
-            "totp" => {
-                let user = repo.get_user_by_name(&req.username).await.unwrap_or(None);
-                let has_2fa = if let Some(u) = &user {
-                    repo.is_2fa_enabled(u.id).await.unwrap_or(false)
-                } else {
-                    false
-                };
-
-                if !has_2fa && !self.settings.totp.required {
-                    StepResult::Skip
-                } else if req.step_type == "init" {
-                    let u = user
-                        .as_ref()
-                        .ok_or_else(|| Status::internal("User not found"))?;
-                    let secret = totp_rs::Secret::generate_secret();
-                    let totp = totp_rs::TOTP::new(
-                        totp_rs::Algorithm::SHA1,
-                        6,
-                        1,
-                        30,
-                        secret
-                            .to_bytes()
-                            .map_err(|_| Status::internal("Secret error"))?,
-                    )
-                    .map_err(|_| Status::internal("TOTP generation failed"))?;
-                    let otpauth_uri = format!(
-                        "otpauth://totp/{}:{}?secret={}&issuer={}",
-                        "xauthd",
-                        req.username,
-                        totp.get_secret_base32(),
-                        "xauthd"
-                    );
-                    let new_flow_token = crate::jwt::generate_flow_token(
-                        &req.username,
-                        &chain_name,
-                        step_index,
-                        &self.settings.jwt.secret,
-                        600,
-                    )
-                    .map_err(|_| Status::internal("Token failed"))?;
-                    repo.set_totp_secret(u.id, &totp.get_secret_base32())
-                        .await
-                        .map_err(|_| Status::internal("Failed to save TOTP secret"))?;
-                    return Ok(Response::new(AuthStepResponse {
-                        success: true,
-                        message: otpauth_uri,
-                        next_action: "require_totp".into(),
-                        session_token: "".into(),
-                        flow_token: new_flow_token,
-                    }));
-                } else if req.step_type == "totp" {
-                    let user = user
-                        .as_ref()
-                        .ok_or_else(|| Status::internal("User not found"))?;
-                    let secret_b32 = user
-                        .totp_secret
-                        .as_ref()
-                        .ok_or_else(|| Status::internal("2FA not configured"))?;
-                    let secret = totp_rs::Secret::Encoded(secret_b32.clone());
-                    let totp = totp_rs::TOTP::new(
-                        totp_rs::Algorithm::SHA1,
-                        6,
-                        1,
-                        30,
-                        secret
-                            .to_bytes()
-                            .map_err(|_| Status::internal("Invalid TOTP secret"))?,
-                    )
-                    .map_err(|_| Status::internal("TOTP init failed"))?;
-                    if totp
-                        .check_current(&req.input_data)
-                        .map_err(|_| Status::internal("TOTP verification error"))?
-                    {
-                        StepResult::Ok
-                    } else {
-                        StepResult::Fail("Invalid TOTP code".into())
-                    }
-                } else {
-                    StepResult::Fail("Expected totp step".into())
-                }
-            }
-            custom_step => {
-                let complete_signal = format!("{}_complete", custom_step);
-                if req.step_type == complete_signal {
-                    StepResult::Ok
-                } else {
-                    StepResult::Fail(format!("Expected {}", complete_signal))
-                }
-            }
-        };
-
-        let (success, step_completed) = match &result {
-            StepResult::Skip | StepResult::Ok => (true, true),
-            StepResult::Fail(_) => (false, false),
-        };
-
-        if step_completed {
-            step_index += 1;
-        }
-
-        while step_index < chain.len() {
-            let eval_step = &chain[step_index];
-            if eval_step == "totp" {
-                let user = repo.get_user_by_name(&req.username).await.unwrap_or(None);
-                let has_2fa = if let Some(u) = &user {
-                    repo.is_2fa_enabled(u.id).await.unwrap_or(false)
-                } else {
-                    false
-                };
-                if !has_2fa && !self.settings.totp.required {
-                    step_index += 1;
-                    continue;
-                }
-            }
-            break;
-        }
-
-        if step_index >= chain.len() {
-            let user = repo.get_user_by_name(&req.username).await.unwrap_or(None);
-            if let Some(u) = user {
-                let token = crate::jwt::generate_jwt(
-                    &u.username,
-                    &self.settings.jwt.secret,
-                    self.settings.jwt.session_ttl,
-                )
-                .unwrap_or_default();
-                repo.create_session(
-                    u.id,
-                    &token,
-                    &req.ip_address,
-                    self.settings.jwt.session_ttl as i64,
-                )
-                .await
-                .ok();
-                repo.update_last_login(u.id, &req.ip_address).await.ok();
-
-                return Ok(Response::new(AuthStepResponse {
-                    success: true,
-                    message: "Successfully authenticated!".into(),
-                    next_action: "authenticated".into(),
-                    session_token: token,
-                    flow_token: "".into(),
-                }));
-            } else {
-                return Err(Status::internal("User not found at end of flow"));
-            }
-        }
-
-        let message = match result {
-            StepResult::Fail(msg) => msg,
-            _ => String::new(),
-        };
-
-        let next_step = &chain[step_index];
-        let new_flow_token = crate::jwt::generate_flow_token(
-            &req.username,
-            &chain_name,
-            step_index,
-            &self.settings.jwt.secret,
-            600,
-        )
-        .unwrap_or_default();
-
-        Ok(Response::new(AuthStepResponse {
-            success,
-            message,
-            next_action: format!("require_{}", next_step),
-            session_token: "".into(),
-            flow_token: new_flow_token,
-        }))
     }
 
     async fn validate_session(
