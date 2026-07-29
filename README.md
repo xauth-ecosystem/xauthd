@@ -58,7 +58,41 @@ Options:
   -V, --version  Print version
 ```
 
-Administrative commands are grouped under the `admin` subcommand (e.g., `xauth-core admin --help`).
+Administrative commands are grouped under the `admin` subcommand:
+
+```text
+Usage: xauth-core admin <COMMAND>
+
+Commands:
+  reset-password       Resets a player's password
+  unban                Unbans a player
+  create-oauth-client  Creates a new OAuth2 Client
+  help                 Print this message or the help of the given subcommand(s)
+```
+
+#### `reset-password`
+
+Resets a player's password directly from the CLI.
+
+```bash
+xauth-core admin reset-password <USERNAME> <NEW_PASSWORD>
+```
+
+#### `unban`
+
+Unbans a player by username.
+
+```bash
+xauth-core admin unban <USERNAME>
+```
+
+#### `create-oauth-client`
+
+Registers a new OAuth2 client in the database.
+
+```bash
+xauth-core admin create-oauth-client --name <NAME> --redirect-uri <URI>
+```
 
 ### Daemon Mode (Background)
 
