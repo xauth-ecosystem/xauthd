@@ -9,13 +9,13 @@ use crate::xauth_v1::{
 use sea_orm::DatabaseConnection;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::mpsc;
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, oneshot, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 use tracing::info;
 
-type ClientSender = mpsc::Sender<Result<CoreCommand, Status>>;
+pub type ClientSender = mpsc::Sender<Result<CoreCommand, Status>>;
+pub type PendingScopeMap = Arc<RwLock<HashMap<String, oneshot::Sender<String>>>>;
 
 enum StepResult {
     Skip,
@@ -26,7 +26,8 @@ enum StepResult {
 pub struct XAuthCoreService {
     db: DatabaseConnection,
     settings: Arc<crate::config::Settings>,
-    clients: Arc<RwLock<HashMap<String, ClientSender>>>,
+    pub clients: Arc<RwLock<HashMap<String, ClientSender>>>,
+    pub pending_scope_requests: PendingScopeMap,
 }
 
 impl XAuthCoreService {
@@ -35,6 +36,7 @@ impl XAuthCoreService {
             db,
             settings,
             clients: Arc::new(RwLock::new(HashMap::new())),
+            pending_scope_requests: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
@@ -49,7 +51,9 @@ impl AuthService for XAuthCoreService {
     ) -> Result<Response<Self::ConnectServerStream>, Status> {
         let mut in_stream = request.into_inner();
         let (tx, rx) = mpsc::channel(100);
+
         let clients = self.clients.clone();
+        let pending_requests = self.pending_scope_requests.clone();
 
         tokio::spawn(async move {
             let mut registered_server_id = None;
@@ -65,7 +69,20 @@ impl AuthService for XAuthCoreService {
                         event.server_id
                     );
                 }
+
                 info!("Event from {}: {:?}", event.server_id, event.r#type);
+
+                if event.r#type == 5 {
+                    if let Ok(parsed_payload) =
+                        serde_json::from_str::<serde_json::Value>(&event.payload)
+                    {
+                        if let Some(req_id) = parsed_payload["request_id"].as_str() {
+                            if let Some(sender) = pending_requests.write().await.remove(req_id) {
+                                let _ = sender.send(event.payload.clone());
+                            }
+                        }
+                    }
+                }
             }
 
             if let Some(id) = registered_server_id {
