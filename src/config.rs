@@ -71,6 +71,11 @@ pub struct WebSettings {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct TotpSettings {
+    pub required: bool,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct Settings {
     pub database: DatabaseSettings,
     pub network: NetworkSettings,
@@ -78,6 +83,7 @@ pub struct Settings {
     pub jwt: JwtSettings,
     pub security: SecuritySettings,
     pub auth_flow: AuthFlowSettings,
+    pub totp: TotpSettings,
     pub web: WebSettings,
 }
 
