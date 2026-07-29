@@ -5,7 +5,7 @@ use axum::{
 };
 use crate::db::UserRepository;
 use crate::services::oauth::{OAuthService, TokenRequest as OAuthTokenRequest};
-use super::{dto::{TokenRequest, TokenResponse}, state::AppState};
+use crate::transport::web::{dto::{TokenRequest, TokenResponse}, state::AppState};
 
 pub async fn token_post(
     State(state): State<AppState>,
