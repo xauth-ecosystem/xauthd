@@ -432,7 +432,11 @@ async fn token_post(
             }
         };
 
-        if repo.is_token_blacklisted(&claims.jti).await.unwrap_or(false) {
+        if repo
+            .is_token_blacklisted(&claims.jti)
+            .await
+            .unwrap_or(false)
+        {
             return (
                 axum::http::StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({"error": "invalid_grant", "error_description": "Refresh token has been revoked"})),
