@@ -58,4 +58,3 @@ pub fn verify_password(password: &str, expected_hash: &str) -> bool {
             .is_ok()
     }
 }
-
