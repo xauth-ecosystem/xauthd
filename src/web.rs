@@ -244,6 +244,9 @@ async fn login_post(State(state): State<AppState>, Form(f): Form<LoginForm>) -> 
                 if let Some(redirect_uri) = f.redirect_uri {
                     url.push_str(&format!("&redirect_uri={}", redirect_uri));
                 }
+                if let Some(s) = f.scope {
+                    url.push_str(&format!("&scope={}", s));
+                }
                 if let Some(s) = f.state {
                     url.push_str(&format!("&state={}", s));
                 }
