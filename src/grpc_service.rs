@@ -868,4 +868,50 @@ mod tests {
         assert!(!resp.session_token.is_empty());
         assert!(resp.flow_token.is_empty());
     }
+
+    #[tokio::test]
+    async fn test_process_auth_step_register_user_exists() {
+        let db = setup_test_db().await;
+
+        let existing_user = crate::db::ActiveModel {
+            username: Set("existing_player".into()),
+            password_hash: Set("hash".into()),
+            failed_attempts: Set(0),
+            is_banned: Set(false),
+            must_change_password: Set(false),
+            ..Default::default()
+        };
+        existing_user.insert(&db).await.unwrap();
+
+        let settings = Arc::new(Settings {
+            auth_flow: AuthFlowSettings {
+                register_chain: vec!["register".into()],
+                ..get_test_settings().auth_flow.clone()
+            },
+            ..get_test_settings().as_ref().clone()
+        });
+        let service = XAuthCoreService::new(db, settings.clone());
+
+        let flow_token = crate::jwt::generate_flow_token(
+            "existing_player",
+            "register",
+            0,
+            &settings.jwt.secret,
+            600,
+        )
+        .unwrap();
+
+        let req = Request::new(AuthStepRequest {
+            username: "existing_player".into(),
+            step_type: "register".into(),
+            input_data: "my_password".into(),
+            ip_address: "127.0.0.1".into(),
+            flow_token,
+            server_id: "test_server".into(),
+        });
+
+        let resp = service.process_auth_step(req).await.unwrap().into_inner();
+        assert!(!resp.success);
+        assert_eq!(resp.message, "User already exists!");
+    }
 }
