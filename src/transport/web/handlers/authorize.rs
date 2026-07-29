@@ -3,7 +3,7 @@ use axum::{
     response::IntoResponse,
 };
 use crate::db::UserRepository;
-use super::{dto::LoginQuery, state::AppState, templates::render_template};
+use crate::transport::web::{dto::LoginQuery, state::AppState, templates::render_template};
 
 pub async fn authorize_get(
     State(state): State<AppState>,
@@ -12,7 +12,7 @@ pub async fn authorize_get(
     let repo = UserRepository::new(state.db.clone());
 
     let scope = match &q.scope {
-        Some(s) if !s.is_empty() => s.clone(),
+        Some(s) if !s.is_empty() => s.clone() as String,
         _ => {
             return (
                 axum::http::StatusCode::BAD_REQUEST,
@@ -25,7 +25,7 @@ pub async fn authorize_get(
     let code_challenge_method = q.code_challenge_method.as_deref().unwrap_or("");
     if !matches!(code_challenge_method, "S256" | "plain" | "") {
         if let Some(redirect_uri) = &q.redirect_uri {
-            let sep = if redirect_uri.contains('?') { '&' } else { '?' };
+            let sep: char = if redirect_uri.contains('?') { '&' } else { '?' };
             let url = format!(
                 "{}{}error=invalid_request&state={}",
                 redirect_uri,
@@ -62,7 +62,7 @@ pub async fn authorize_get(
             for req_scope in &requested_scopes {
                 if !allowed.contains(req_scope) {
                     if let Some(redirect_uri) = &q.redirect_uri {
-                        let sep = if redirect_uri.contains('?') { '&' } else { '?' };
+                        let sep: char = if redirect_uri.contains('?') { '&' } else { '?' };
                         let url = format!(
                             "{}{}error=invalid_scope&state={}",
                             redirect_uri,
