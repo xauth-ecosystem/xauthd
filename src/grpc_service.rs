@@ -150,32 +150,16 @@ impl AuthService for XAuthCoreService {
         request: Request<SessionRequest>,
     ) -> Result<Response<SessionResponse>, Status> {
         let req = request.into_inner();
-        let repo = UserRepository::new(self.db.clone());
+        let sessions = crate::services::session::SessionService::new(
+            UserRepository::new(self.db.clone()),
+            self.settings.clone(),
+        );
 
-        let mut is_valid = false;
-        let mut username = String::new();
-        let mut expires_at = 0;
-
-        if let Ok(Some(session)) = repo.get_session(&req.session_token).await {
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64;
-            if session.expires_at > now {
-                if let Ok(claims) =
-                    crate::jwt::validate_jwt(&req.session_token, &self.settings.jwt.secret)
-                {
-                    is_valid = true;
-                    username = claims.sub;
-                    expires_at = session.expires_at;
-                }
-            }
-        }
-
+        let result = sessions.validate(&req.session_token).await;
         Ok(Response::new(SessionResponse {
-            is_valid,
-            username,
-            expires_at,
+            is_valid: result.is_valid,
+            username: result.username,
+            expires_at: result.expires_at,
         }))
     }
 
@@ -184,10 +168,12 @@ impl AuthService for XAuthCoreService {
         request: Request<EndSessionRequest>,
     ) -> Result<Response<EndSessionResponse>, Status> {
         let req = request.into_inner();
-        let repo = UserRepository::new(self.db.clone());
+        let sessions = crate::services::session::SessionService::new(
+            UserRepository::new(self.db.clone()),
+            self.settings.clone(),
+        );
 
-        repo.delete_session(&req.session_token).await.ok();
-
+        sessions.end(&req.session_token).await;
         Ok(Response::new(EndSessionResponse { success: true }))
     }
 
