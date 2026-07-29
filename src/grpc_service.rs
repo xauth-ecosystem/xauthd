@@ -1139,4 +1139,54 @@ mod tests {
             .into_inner();
         assert!(!resp.success);
     }
+
+    #[tokio::test]
+    async fn test_revoke_o_auth_token() {
+        let db = setup_test_db().await;
+        let settings = get_test_settings();
+        let repo = UserRepository::new(db.clone());
+
+        repo.create_oauth_client("client1", "secret1", "http://localhost")
+            .await
+            .unwrap();
+        repo.create_user("oauth_user", "hash").await.unwrap();
+
+        let token = crate::jwt::generate_jwt(
+            "oauth_user",
+            &settings.jwt.secret,
+            settings.jwt.access_token_ttl,
+        )
+        .unwrap();
+
+        repo.create_oauth_token(
+            "client1",
+            repo.get_user_by_name("oauth_user")
+                .await
+                .unwrap()
+                .unwrap()
+                .id,
+            &token,
+            None,
+            settings.jwt.access_token_ttl as i64,
+            "openid",
+        )
+        .await
+        .unwrap();
+
+        let service = XAuthCoreService::new(db.clone(), settings.clone());
+
+        let req = Request::new(OAuthRevokeRequest {
+            token: token.clone(),
+            client_id: "client1".into(),
+        });
+
+        let resp = service.revoke_o_auth_token(req).await.unwrap().into_inner();
+        assert!(resp.success);
+
+        let claims = crate::jwt::validate_jwt(&token, &settings.jwt.secret).unwrap();
+        assert!(
+            repo.is_token_blacklisted(&claims.jti).await.unwrap(),
+            "Token should be blacklisted after revocation"
+        );
+    }
 }
