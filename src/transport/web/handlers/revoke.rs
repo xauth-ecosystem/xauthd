@@ -3,7 +3,7 @@ use axum::{
     response::IntoResponse,
 };
 use crate::db::UserRepository;
-use super::{dto::RevokeRequest, state::AppState};
+use crate::transport::web::{dto::RevokeRequest, state::AppState};
 
 pub async fn revoke_post(
     State(state): State<AppState>,
