@@ -1,24 +1,11 @@
 use sea_orm::Database;
+use sea_orm_migration::MigratorTrait;
 use std::net::SocketAddr;
 use tonic::transport::Server;
 use tracing::info;
-
-pub mod config;
-mod db;
-mod grpc_service;
-mod hash;
-mod jwt;
-mod migrator;
-pub mod web;
-
-pub mod xauth_v1 {
-    tonic::include_proto!("xauth.v1");
-}
-
-use crate::grpc_service::XAuthCoreService;
-use crate::migrator::Migrator;
-use crate::xauth_v1::auth_service_server::AuthServiceServer;
-use sea_orm_migration::MigratorTrait;
+use xauth_core::grpc_service::XAuthCoreService;
+use xauth_core::migrator::Migrator;
+use xauth_core::xauth_v1::auth_service_server::AuthServiceServer;
 
 use clap::{Parser, Subcommand};
 
@@ -99,7 +86,7 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         Commands::Start { .. } => {
             info!("Starting XAuth Core Daemon...");
 
-            let settings = config::Settings::new().unwrap_or_else(|err| {
+            let settings = xauth_core::config::Settings::new().unwrap_or_else(|err| {
                 tracing::error!(
                     "Failed to load configuration: {}. Please check your xauthd.toml.",
                     err
@@ -124,7 +111,8 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 .add_service(AuthServiceServer::new(core_service))
                 .serve(addr);
 
-            let web_app = crate::web::router(db.clone(), std::sync::Arc::new(settings.clone()));
+            let web_app =
+                xauth_core::web::router(db.clone(), std::sync::Arc::new(settings.clone()));
             let web_listener = tokio::net::TcpListener::bind(&settings.network.web_address).await?;
             info!(
                 "XAuth Web Dashboard listening on {}",
@@ -138,20 +126,20 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             web_res.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
         }
         Commands::Migrate => {
-            let settings = config::Settings::new()?;
+            let settings = xauth_core::config::Settings::new()?;
             let db = Database::connect(&settings.database.url).await?;
             info!("Applying database migrations...");
             Migrator::up(&db, None).await?;
             info!("Migrations applied successfully.");
         }
-        Commands::ConfigCheck => match config::Settings::new() {
+        Commands::ConfigCheck => match xauth_core::config::Settings::new() {
             Ok(_) => info!("Configuration syntax is valid."),
             Err(e) => tracing::error!("Configuration error: {}", e),
         },
         Commands::Admin { admin_cmd } => {
-            let settings = config::Settings::new()?;
+            let settings = xauth_core::config::Settings::new()?;
             let db = Database::connect(&settings.database.url).await?;
-            let repo = crate::db::UserRepository::new(db);
+            let repo = xauth_core::db::UserRepository::new(db);
 
             match admin_cmd {
                 AdminCommands::ResetPassword {
@@ -159,9 +147,11 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                     new_password,
                 } => {
                     if let Some(user) = repo.get_user_by_name(username).await? {
-                        let hash =
-                            crate::hash::hash_password(new_password, &settings.password_hashing)
-                                .unwrap();
+                        let hash = xauth_core::hash::hash_password(
+                            new_password,
+                            &settings.password_hashing,
+                        )
+                        .unwrap();
                         repo.update_password(user.id, &hash).await?;
                         info!("Password reset successfully for user '{}'.", username);
                     } else {
