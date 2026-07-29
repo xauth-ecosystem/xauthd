@@ -125,67 +125,65 @@ impl AuthService for XAuthCoreService {
         }
 
         let current_step = &chain[step_index];
-        let mut success = false;
-        let mut message = String::new();
-        let mut step_completed = false;
 
-        match current_step.as_str() {
+        if req.step_type == "init" && current_step.as_str() != "totp" {
+            let new_flow_token = crate::jwt::generate_flow_token(
+                &req.username,
+                &chain_name,
+                step_index,
+                &self.settings.jwt.secret,
+                600,
+            )
+            .map_err(|_| Status::internal("Token failed"))?;
+            return Ok(Response::new(AuthStepResponse {
+                success: true,
+                message: String::new(),
+                next_action: format!("require_{}", current_step),
+                session_token: "".into(),
+                flow_token: new_flow_token,
+            }));
+        }
+
+        let result = match current_step.as_str() {
             "password" => {
-                if req.step_type == "password" {
-                    let mut user = match repo.get_user_by_name(&req.username).await {
-                        Ok(Some(u)) => u,
-                        _ => return Err(Status::unauthenticated("User not found")),
-                    };
+                let mut user = match repo.get_user_by_name(&req.username).await {
+                    Ok(Some(u)) => u,
+                    _ => return Err(Status::unauthenticated("User not found")),
+                };
 
-                    let now = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs() as i64;
-                    if let Some(last_failed) = user.last_failed_attempt {
-                        if now - last_failed > self.settings.security.failed_attempts_reset_interval
-                        {
-                            repo.reset_failed_attempts(user.id).await.ok();
-                            user.failed_attempts = 0;
-                        }
-                    }
-
-                    if user.failed_attempts >= self.settings.security.max_failed_attempts {
-                        return Err(Status::permission_denied(
-                            "Too many failed attempts. Account locked.",
-                        ));
-                    }
-
-                    if crate::hash::verify_password(&req.input_data, &user.password_hash) {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64;
+                if let Some(last_failed) = user.last_failed_attempt {
+                    if now - last_failed > self.settings.security.failed_attempts_reset_interval {
                         repo.reset_failed_attempts(user.id).await.ok();
-                        success = true;
-                        step_completed = true;
-                    } else {
-                        repo.increment_failed_attempts(user.id).await.ok();
-                        message = "Invalid password!".into();
+                        user.failed_attempts = 0;
                     }
-                } else if req.step_type == "init" {
-                    success = true;
+                }
+
+                if user.failed_attempts >= self.settings.security.max_failed_attempts {
+                    return Err(Status::permission_denied(
+                        "Too many failed attempts. Account locked.",
+                    ));
+                }
+
+                if crate::hash::verify_password(&req.input_data, &user.password_hash) {
+                    repo.reset_failed_attempts(user.id).await.ok();
+                    StepResult::Ok
                 } else {
-                    return Err(Status::invalid_argument("Expected password step"));
+                    repo.increment_failed_attempts(user.id).await.ok();
+                    StepResult::Fail("Invalid password!".into())
                 }
             }
             "register" => {
-                if req.step_type == "register" {
-                    let hash = crate::hash::hash_password(
-                        &req.input_data,
-                        &self.settings.password_hashing,
-                    )
-                    .map_err(|_| Status::internal("Hash failed"))?;
-                    if repo.create_user(&req.username, &hash).await.is_ok() {
-                        success = true;
-                        step_completed = true;
-                    } else {
-                        message = "User already exists!".into();
-                    }
-                } else if req.step_type == "init" {
-                    success = true;
+                let hash =
+                    crate::hash::hash_password(&req.input_data, &self.settings.password_hashing)
+                        .map_err(|_| Status::internal("Hash failed"))?;
+                if repo.create_user(&req.username, &hash).await.is_ok() {
+                    StepResult::Ok
                 } else {
-                    return Err(Status::invalid_argument("Expected register step"));
+                    StepResult::Fail("User already exists!".into())
                 }
             }
             "totp" => {
@@ -197,8 +195,7 @@ impl AuthService for XAuthCoreService {
                 };
 
                 if !has_2fa && !self.settings.totp.required {
-                    success = true;
-                    step_completed = true;
+                    StepResult::Skip
                 } else if req.step_type == "init" {
                     let u = user
                         .as_ref()
@@ -262,40 +259,33 @@ impl AuthService for XAuthCoreService {
                         .check_current(&req.input_data)
                         .map_err(|_| Status::internal("TOTP verification error"))?
                     {
-                        success = true;
-                        step_completed = true;
+                        StepResult::Ok
                     } else {
-                        message = "Invalid TOTP code".into();
+                        StepResult::Fail("Invalid TOTP code".into())
                     }
                 } else {
-                    return Err(Status::invalid_argument("Expected totp step"));
+                    StepResult::Fail("Expected totp step".into())
                 }
             }
             custom_step => {
                 let complete_signal = format!("{}_complete", custom_step);
                 if req.step_type == complete_signal {
-                    success = true;
-                    step_completed = true;
-                } else if req.step_type == "init" {
-                    success = true;
+                    StepResult::Ok
                 } else {
-                    return Err(Status::invalid_argument(format!(
-                        "Expected {}",
-                        complete_signal
-                    )));
+                    StepResult::Fail(format!("Expected {}", complete_signal))
                 }
             }
-        }
+        };
+
+        let (success, step_completed) = match &result {
+            StepResult::Skip | StepResult::Ok => (true, true),
+            StepResult::Fail(_) => (false, false),
+        };
 
         if step_completed {
             step_index += 1;
         }
 
-        // Skip any subsequent steps that should be auto-skipped (like totp when not enabled).
-        // A recursive or loop approach is best here, but for now we only check the next step if it's totp.
-        // To keep it simple, we let the client send a dummy request or we can handle it via a loop.
-        // Actually, if we just let the client send "init" for the next step, or if we evaluate it right away...
-        // Let's just evaluate skip conditions.
         while step_index < chain.len() {
             let eval_step = &chain[step_index];
             if eval_step == "totp" {
@@ -305,7 +295,7 @@ impl AuthService for XAuthCoreService {
                 } else {
                     false
                 };
-                if !has_2fa {
+                if !has_2fa && !self.settings.totp.required {
                     step_index += 1;
                     continue;
                 }
@@ -343,6 +333,11 @@ impl AuthService for XAuthCoreService {
                 return Err(Status::internal("User not found at end of flow"));
             }
         }
+
+        let message = match result {
+            StepResult::Fail(msg) => msg,
+            _ => String::new(),
+        };
 
         let next_step = &chain[step_index];
         let new_flow_token = crate::jwt::generate_flow_token(
@@ -574,7 +569,7 @@ mod tests {
     use super::*;
     use crate::config::{
         AuthFlowSettings, DatabaseSettings, JwtSettings, NetworkSettings, PasswordHashingSettings,
-        SecuritySettings, Settings, WebSettings,
+        SecuritySettings, Settings, TotpSettings, WebSettings,
     };
     use crate::db::Entity as UserEntity;
     use sea_orm::{ActiveModelTrait, ConnectionTrait, Database, Schema, Set};
@@ -622,6 +617,7 @@ mod tests {
                 templates_dir: "./templates".into(),
                 public_dir: None,
             },
+            totp: TotpSettings { required: false },
         })
     }
 
