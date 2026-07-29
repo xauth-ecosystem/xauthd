@@ -1034,4 +1034,52 @@ mod tests {
         assert_eq!(resp.username, "session_user");
         assert!(resp.expires_at > 0);
     }
+
+    #[tokio::test]
+    async fn test_end_session() {
+        let db = setup_test_db().await;
+        let settings = get_test_settings();
+        let repo = UserRepository::new(db.clone());
+
+        repo.create_user("session_user2", "hash").await.unwrap();
+        let user = repo
+            .get_user_by_name("session_user2")
+            .await
+            .unwrap()
+            .unwrap();
+
+        let token = crate::jwt::generate_jwt(
+            "session_user2",
+            &settings.jwt.secret,
+            settings.jwt.session_ttl,
+        )
+        .unwrap();
+
+        repo.create_session(
+            user.id,
+            &token,
+            "127.0.0.1",
+            settings.jwt.session_ttl as i64,
+        )
+        .await
+        .unwrap();
+
+        let service = XAuthCoreService::new(db, settings);
+
+        let req = Request::new(EndSessionRequest {
+            username: "session_user2".into(),
+            session_token: token.clone(),
+        });
+
+        let resp = service.end_session(req).await.unwrap().into_inner();
+        assert!(resp.success);
+
+        let req = Request::new(SessionRequest {
+            session_token: token,
+            ip_address: "127.0.0.1".into(),
+        });
+
+        let resp = service.validate_session(req).await.unwrap().into_inner();
+        assert!(!resp.is_valid);
+    }
 }
