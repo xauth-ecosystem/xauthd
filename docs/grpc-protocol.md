@@ -10,14 +10,14 @@ The `ConnectServer` RPC method establishes a persistent, long-lived connection b
 rpc ConnectServer (stream PluginEvent) returns (stream CoreCommand);
 ```
 
-- **Client (Game Server) -> Server (xauthd):** Sends `PluginEvent` messages to notify the core of state changes (e.g., a player joined).
-- **Server (xauthd) -> Client (Game Server):** Pushes `CoreCommand` messages to instruct the game server to perform actions (e.g., kick a player).
+- **Client (Game Server) -> Server (xauthd):** Sends `PluginEvent` messages to notify the core of state changes or respond to data requests.
+- **Server (xauthd) -> Client (Game Server):** Pushes `CoreCommand` messages to instruct the game server to perform actions or fetch data.
 
 ---
 
 ## 1. Plugin Events (Game Server -> xauthd)
 
-The game server must emit `PluginEvent` messages whenever a relevant state change occurs in the game.
+The game server must emit `PluginEvent` messages whenever a relevant state change occurs in the game, or to reply to specific core commands.
 
 ### Message Structure
 
@@ -60,6 +60,21 @@ Emitted when a player disconnects from the game server.
 #### `STATE_UPDATE` (4)
 Reserved for future synchronization of custom player states or offline data.
 
+#### `SCOPE_DATA_RESPONSE` (5)
+Emitted as a direct response to a `FETCH_SCOPES` command from `xauthd`. Used during Dynamic Scope Resolution to provide custom player data (e.g., balance, guild) to the HTTP `/user` endpoint.
+- `username`: The target player's username.
+- `ip_address`: *(Empty)*
+- `payload`: A JSON string containing the original `request_id` and the resolved `data` key-value pairs.
+  ```json
+  {
+    "request_id": "Steve-123456789",
+    "data": {
+      "economy:balance": 1500.50,
+      "guilds:name": "Warriors"
+    }
+  }
+  ```
+
 ---
 
 ## 2. Core Commands (xauthd -> Game Server)
@@ -95,3 +110,14 @@ Reserved for requesting a forced update of player state data.
 Instructs the game server to freeze the player's movement and force them to undergo the authentication flow again (e.g., triggered via an admin dashboard action).
 - `target_username`: The player to freeze.
 - `payload`: *(Empty or optional reason)*
+
+#### `FETCH_SCOPES` (4)
+Instructs the game server to gather custom data for specific OAuth2 scopes from its memory/providers and send it back via a `SCOPE_DATA_RESPONSE` event.
+- `target_username`: The player whose data is being requested.
+- `payload`: A JSON string containing a unique `request_id` and an array of requested `scopes`.
+  ```json
+  {
+    "request_id": "Steve-123456789",
+    "scopes": ["economy:balance", "guilds:name"]
+  }
+  ```
