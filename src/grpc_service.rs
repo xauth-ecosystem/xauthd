@@ -26,18 +26,32 @@ enum StepResult {
 pub struct XAuthCoreService {
     db: DatabaseConnection,
     settings: Arc<crate::config::Settings>,
+    rsa_key: Arc<rsa::RsaPrivateKey>,
     pub clients: Arc<RwLock<HashMap<String, ClientSender>>>,
     pub pending_scope_requests: PendingScopeMap,
 }
 
 impl XAuthCoreService {
-    pub fn new(db: DatabaseConnection, settings: Arc<crate::config::Settings>) -> Self {
+    pub fn new(
+        db: DatabaseConnection,
+        settings: Arc<crate::config::Settings>,
+        rsa_key: Arc<rsa::RsaPrivateKey>,
+    ) -> Self {
         Self {
             db,
             settings,
+            rsa_key,
             clients: Arc::new(RwLock::new(HashMap::new())),
             pending_scope_requests: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    fn oauth_service(&self) -> crate::services::oauth::OAuthService {
+        crate::services::oauth::OAuthService::new(
+            UserRepository::new(self.db.clone()),
+            self.settings.clone(),
+            self.rsa_key.clone(),
+        )
     }
 }
 
