@@ -689,6 +689,7 @@ async fn introspect_post(
                 Json(serde_json::json!({
                     "active": true,
                     "sub": claims.sub,
+                    "username": claims.sub,
                     "exp": claims.exp,
                     "iat": claims.iat,
                     "scope": scope
