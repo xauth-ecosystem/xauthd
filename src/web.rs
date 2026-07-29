@@ -734,24 +734,25 @@ async fn revoke_post(
             .into_response();
     }
 
-    repo.delete_oauth_token(&req.token).await.ok();
-
     let hint = req.token_type_hint.as_deref();
     if matches!(hint, Some("access_token")) {
+        // Access token: blacklist JTI, keep oauth_tokens row (refresh may still be valid)
         if let Ok(claims) = crate::jwt::validate_jwt(&req.token, &state.settings.jwt.secret) {
             repo.blacklist_token(&claims.jti, claims.exp as i64)
                 .await
                 .ok();
         }
     } else if matches!(hint, Some("refresh_token")) {
-        // Refresh tokens are deleted from oauth_tokens above; blacklist JTI too
+        // Refresh token: delete row + blacklist JTI
+        repo.delete_oauth_token(&req.token).await.ok();
         if let Ok(claims) = crate::jwt::validate_jwt(&req.token, &state.settings.jwt.secret) {
             repo.blacklist_token(&claims.jti, claims.exp as i64)
                 .await
                 .ok();
         }
     } else {
-        // No hint or unknown hint: current behavior — delete row and blacklist JTI
+        // No hint or unknown: current behavior — delete row + blacklist JTI
+        repo.delete_oauth_token(&req.token).await.ok();
         if let Ok(claims) = crate::jwt::validate_jwt(&req.token, &state.settings.jwt.secret) {
             repo.blacklist_token(&claims.jti, claims.exp as i64)
                 .await
