@@ -69,6 +69,7 @@ struct TokenRequest {
     client_id: String,
     client_secret: String,
     code_verifier: Option<String>,
+    refresh_token: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -313,108 +314,211 @@ async fn token_post(
             .into_response();
     }
 
-    if req.grant_type != "authorization_code" {
-        return (
-            axum::http::StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({"error": "unsupported_grant_type"})),
-        )
-            .into_response();
-    }
+    if req.grant_type == "authorization_code" {
+        let code = req.code.unwrap_or_default();
+        if let Ok(claims) = crate::jwt::validate_jwt(&code, &state.settings.jwt.secret) {
+            if let Ok(data) = serde_json::from_str::<serde_json::Value>(&claims.sub) {
+                let u = data["u"].as_str().unwrap_or_default();
+                let c = data["c"].as_str().unwrap_or_default();
+                let r = data["r"].as_str().unwrap_or_default();
 
-    let code = req.code.unwrap_or_default();
-    if let Ok(claims) = crate::jwt::validate_jwt(&code, &state.settings.jwt.secret) {
-        if let Ok(data) = serde_json::from_str::<serde_json::Value>(&claims.sub) {
-            let u = data["u"].as_str().unwrap_or_default();
-            let c = data["c"].as_str().unwrap_or_default();
-            let r = data["r"].as_str().unwrap_or_default();
+                let cc = data["cc"].as_str().unwrap_or_default();
+                let ccm = data["ccm"].as_str().unwrap_or_default();
+                let req_redirect_uri = req.redirect_uri.unwrap_or_default();
 
-            let cc = data["cc"].as_str().unwrap_or_default();
-            let ccm = data["ccm"].as_str().unwrap_or_default();
-            let req_redirect_uri = req.redirect_uri.unwrap_or_default();
+                if c == req.client_id && r == req_redirect_uri {
+                    if !cc.is_empty() {
+                        let code_verifier = req.code_verifier.unwrap_or_default();
+                        if code_verifier.is_empty() {
+                            return (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "invalid_request", "error_description": "code_verifier required"}))).into_response();
+                        }
 
-            if c == req.client_id && r == req_redirect_uri {
-                if !cc.is_empty() {
-                    let code_verifier = req.code_verifier.unwrap_or_default();
-                    if code_verifier.is_empty() {
-                        return (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "invalid_request", "error_description": "code_verifier required"}))).into_response();
+                        let is_valid = if ccm == "S256" {
+                            use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+                            use sha2::{Digest, Sha256};
+                            let mut hasher = Sha256::new();
+                            hasher.update(code_verifier.as_bytes());
+                            let hash = hasher.finalize();
+                            let expected = URL_SAFE_NO_PAD.encode(hash);
+                            expected == cc
+                        } else if ccm == "plain" || ccm == "plain_text" || ccm.is_empty() {
+                            code_verifier == cc
+                        } else {
+                            false
+                        };
+
+                        if !is_valid {
+                            return (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "invalid_grant", "error_description": "Invalid code_verifier"}))).into_response();
+                        }
                     }
 
-                    let is_valid = if ccm == "S256" {
-                        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-                        use sha2::{Digest, Sha256};
-                        let mut hasher = Sha256::new();
-                        hasher.update(code_verifier.as_bytes());
-                        let hash = hasher.finalize();
-                        let expected = URL_SAFE_NO_PAD.encode(hash);
-                        expected == cc
-                    } else if ccm == "plain" || ccm == "plain_text" || ccm.is_empty() {
-                        code_verifier == cc
-                    } else {
-                        false
-                    };
+                    if let Ok(Some(user)) = repo.get_user_by_name(u).await {
+                        let access_token = crate::jwt::generate_jwt(
+                            u,
+                            &state.settings.jwt.secret,
+                            state.settings.jwt.access_token_ttl,
+                        )
+                        .unwrap();
+                        let refresh_token = crate::jwt::generate_jwt(
+                            u,
+                            &state.settings.jwt.secret,
+                            state.settings.jwt.refresh_token_ttl,
+                        )
+                        .unwrap();
+                        let n = data["n"].as_str().unwrap_or_default();
+                        let nonce_opt = if n.is_empty() {
+                            None
+                        } else {
+                            Some(n.to_string())
+                        };
+                        let id_token = crate::jwt::generate_rs256_jwt(
+                            u,
+                            &state.rsa_key,
+                            state.settings.jwt.access_token_ttl,
+                            nonce_opt,
+                        )
+                        .unwrap();
 
-                    if !is_valid {
-                        return (axum::http::StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "invalid_grant", "error_description": "Invalid code_verifier"}))).into_response();
+                        let scopes = "openid profile";
+                        repo.create_oauth_token(
+                            &req.client_id,
+                            user.id,
+                            &access_token,
+                            Some(&refresh_token),
+                            state.settings.jwt.access_token_ttl as i64,
+                            scopes,
+                        )
+                        .await
+                        .ok();
+
+                        return Json(TokenResponse {
+                            access_token,
+                            token_type: "Bearer".to_string(),
+                            expires_in: state.settings.jwt.access_token_ttl,
+                            refresh_token,
+                            id_token,
+                        })
+                        .into_response();
                     }
-                }
-
-                if let Ok(Some(user)) = repo.get_user_by_name(u).await {
-                    let access_token = crate::jwt::generate_jwt(
-                        u,
-                        &state.settings.jwt.secret,
-                        state.settings.jwt.access_token_ttl,
-                    )
-                    .unwrap();
-                    let refresh_token = crate::jwt::generate_jwt(
-                        u,
-                        &state.settings.jwt.secret,
-                        state.settings.jwt.refresh_token_ttl,
-                    )
-                    .unwrap();
-                    let n = data["n"].as_str().unwrap_or_default();
-                    let nonce_opt = if n.is_empty() {
-                        None
-                    } else {
-                        Some(n.to_string())
-                    };
-                    let id_token = crate::jwt::generate_rs256_jwt(
-                        u,
-                        &state.rsa_key,
-                        state.settings.jwt.access_token_ttl,
-                        nonce_opt,
-                    )
-                    .unwrap();
-
-                    let scopes = "openid profile";
-                    repo.create_oauth_token(
-                        &req.client_id,
-                        user.id,
-                        &access_token,
-                        Some(&refresh_token),
-                        state.settings.jwt.access_token_ttl as i64,
-                        scopes,
-                    )
-                    .await
-                    .ok();
-
-                    return Json(TokenResponse {
-                        access_token,
-                        token_type: "Bearer".to_string(),
-                        expires_in: state.settings.jwt.access_token_ttl,
-                        refresh_token,
-                        id_token,
-                    })
-                    .into_response();
                 }
             }
         }
-    }
 
-    (
-        axum::http::StatusCode::BAD_REQUEST,
-        Json(serde_json::json!({"error": "invalid_grant"})),
-    )
+        (
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "invalid_grant"})),
+        )
+            .into_response()
+    } else if req.grant_type == "refresh_token" {
+        let refresh_token = match req.refresh_token {
+            Some(t) => t,
+            None => {
+                return (
+                    axum::http::StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({"error": "invalid_request", "error_description": "Missing refresh_token parameter"})),
+                )
+                    .into_response();
+            }
+        };
+
+        let claims = match crate::jwt::validate_jwt(&refresh_token, &state.settings.jwt.secret) {
+            Ok(c) => c,
+            Err(_) => {
+                return (
+                    axum::http::StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({"error": "invalid_grant", "error_description": "Invalid or expired refresh token"})),
+                )
+                    .into_response();
+            }
+        };
+
+        if repo.is_token_blacklisted(&claims.jti).await.unwrap_or(false) {
+            return (
+                axum::http::StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "invalid_grant", "error_description": "Refresh token has been revoked"})),
+            )
+                .into_response();
+        }
+
+        let existing_token = match repo.get_oauth_token(&refresh_token).await {
+            Ok(Some(t)) => t,
+            _ => {
+                return (
+                    axum::http::StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({"error": "invalid_grant", "error_description": "Refresh token not found"})),
+                )
+                    .into_response();
+            }
+        };
+
+        if existing_token.client_id != req.client_id {
+            return (
+                axum::http::StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "invalid_grant", "error_description": "Refresh token was issued to another client"})),
+            )
+                .into_response();
+        }
+
+        let username = claims.sub.clone();
+        let new_access_token = crate::jwt::generate_jwt(
+            &username,
+            &state.settings.jwt.secret,
+            state.settings.jwt.access_token_ttl,
+        )
+        .unwrap();
+        let new_refresh_token = crate::jwt::generate_jwt(
+            &username,
+            &state.settings.jwt.secret,
+            state.settings.jwt.refresh_token_ttl,
+        )
+        .unwrap();
+
+        let user = match repo.get_user_by_name(&username).await {
+            Ok(Some(u)) => u,
+            _ => {
+                return (
+                    axum::http::StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({"error": "invalid_grant", "error_description": "User not found"})),
+                )
+                    .into_response();
+            }
+        };
+
+        repo.delete_oauth_token(&refresh_token).await.ok();
+        repo.create_oauth_token(
+            &req.client_id,
+            user.id,
+            &new_access_token,
+            Some(&new_refresh_token),
+            state.settings.jwt.access_token_ttl as i64,
+            &existing_token.scopes,
+        )
+        .await
+        .ok();
+
+        let id_token = crate::jwt::generate_rs256_jwt(
+            &username,
+            &state.rsa_key,
+            state.settings.jwt.access_token_ttl,
+            None,
+        )
+        .unwrap();
+
+        Json(TokenResponse {
+            access_token: new_access_token,
+            token_type: "Bearer".to_string(),
+            expires_in: state.settings.jwt.access_token_ttl,
+            refresh_token: new_refresh_token,
+            id_token,
+        })
         .into_response()
+    } else {
+        (
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "unsupported_grant_type"})),
+        )
+            .into_response()
+    }
 }
 
 async fn user_get(
@@ -536,7 +640,7 @@ async fn discovery_get() -> impl IntoResponse {
         "jwks_uri": format!("{}/jwks", base_url),
         "scopes_supported": ["openid", "profile"],
         "response_types_supported": ["code"],
-        "grant_types_supported": ["authorization_code"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
         "id_token_signing_alg_values_supported": ["RS256"]
     }))
 }
