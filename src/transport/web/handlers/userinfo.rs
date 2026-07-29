@@ -4,9 +4,10 @@ use axum::{
     Json,
 };
 use crate::db::UserRepository;
+use crate::grpc_service::ClientSender;
 use crate::xauth_v1::{core_command::CommandType, CoreCommand};
 use tokio::sync::oneshot;
-use super::state::AppState;
+use crate::transport::web::state::AppState;
 
 pub async fn user_get(
     State(state): State<AppState>,
@@ -44,7 +45,7 @@ pub async fn user_get(
                                     .unwrap()
                                     .as_millis()
                             );
-                            let (tx, rx) = oneshot::channel();
+                            let (tx, rx) = oneshot::channel::<String>();
 
                             state
                                 .pending_scope_requests
@@ -64,7 +65,7 @@ pub async fn user_get(
                                 payload,
                             };
 
-                            let clients_guard = state.grpc_clients.read().await;
+                            let clients_guard: tokio::sync::RwLockReadGuard<std::collections::HashMap<String, ClientSender>> = state.grpc_clients.read().await;
 
                             // Broadcast to all connected Minecraft servers
                             for client in clients_guard.values() {
