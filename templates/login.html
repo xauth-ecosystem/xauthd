@@ -57,22 +57,18 @@
     <script>
         const loginForm = document.getElementById('login-form');
         const loginButton = document.getElementById('login-button');
-        const usernameField = document.getElementById('username-field');
-        const passwordField = document.getElementById('password-field');
-        
-        // Функція для відновлення стану форми
+
         function resetFormState() {
             loginButton.classList.remove('loading', 'disabled');
             loginForm.classList.remove('disabled');
         }
 
-        document.getElementById('login-form').addEventListener('submit', function(event) {
+        loginForm.addEventListener('submit', function(event) {
             event.preventDefault();
-            
-            // 1. Додаємо класи Semantic UI для активації лоадера на кнопці та вимкнення форми
+
             loginButton.classList.add('loading', 'disabled');
-            loginForm.classList.add('disabled'); // Вимикаємо форму, щоб запобігти повторному надсиланню
-            
+            loginForm.classList.add('disabled');
+
             const formData = new URLSearchParams(new FormData(this));
 
             fetch('/login', {
@@ -81,52 +77,22 @@
             })
             .then(response => response.json())
             .then(data => {
-                if (data.request_id) {
-                    connectWithSSE(data.request_id);
+                if (data.redirect_url) {
+                    window.location.href = data.redirect_url;
                 } else {
-                    // Якщо немає request_id (наприклад, помилка валідації на сервері), відновлюємо стан кнопки
-                    resetFormState(); 
-                    // Reload the page with an error
+                    resetFormState();
+                    const errorMsg = data.error || 'Login failed. Please try again.';
                     const currentUrl = new URL(window.location.href);
-                    currentUrl.searchParams.set('error', 'login_failed');
+                    currentUrl.searchParams.set('error', errorMsg);
                     window.location.href = currentUrl.href;
                 }
             })
             .catch(error => {
                 console.error('Login request failed:', error);
-                resetFormState(); // Відновлюємо стан у разі помилки мережі
+                resetFormState();
                 alert('An error occurred during login. Please try again.');
             });
         });
-
-        function connectWithSSE(requestId) {
-            const eventSource = new EventSource(`/login-events?request_id=${requestId}`);
-
-            eventSource.addEventListener('login_result', function(event) {
-                const data = JSON.parse(event.data);
-                if (data.redirect_url) {
-                    window.location.href = data.redirect_url;
-                } else {
-                    resetFormState();
-                    alert('Login process did not complete successfully. Please try again.');
-                }
-                eventSource.close();
-            });
-
-            eventSource.addEventListener('login_timeout', function(event) {
-                console.error('Login timed out.');
-                resetFormState();
-                alert('Login timed out. Please try again.');
-                eventSource.close();
-            });
-
-            eventSource.onerror = function(error) {
-                console.error('EventSource failed:', error);
-                resetFormState();
-                alert('An error occurred while connecting to the server. Please try again.');
-                eventSource.close();
-            };
-        }
     </script>
 
 </body>
