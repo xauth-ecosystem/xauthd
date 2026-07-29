@@ -170,36 +170,11 @@ impl AuthService for XAuthCoreService {
                         &self.settings.password_hashing,
                     )
                     .map_err(|_| Status::internal("Hash failed"))?;
-                    match repo.create_user(&req.username, &hash).await {
-                        Ok(user_id) => {
-                            let secret = totp_rs::Secret::generate_secret();
-                            let totp = totp_rs::TOTP::new(
-                                totp_rs::Algorithm::SHA1,
-                                6,
-                                1,
-                                30,
-                                secret
-                                    .to_bytes()
-                                    .map_err(|_| Status::internal("Secret error"))?,
-                            )
-                            .map_err(|_| Status::internal("TOTP generation failed"))?;
-                            let otpauth_uri = format!(
-                                "otpauth://totp/{}:{}?secret={}&issuer={}",
-                                "xauthd",
-                                &req.username,
-                                totp.get_secret_base32(),
-                                "xauthd"
-                            );
-                            repo.set_totp_secret(user_id, &totp.get_secret_base32())
-                                .await
-                                .map_err(|_| Status::internal("Failed to save TOTP secret"))?;
-                            message = otpauth_uri;
-                            success = true;
-                            step_completed = true;
-                        }
-                        Err(_) => {
-                            message = "User already exists!".into();
-                        }
+                    if repo.create_user(&req.username, &hash).await.is_ok() {
+                        success = true;
+                        step_completed = true;
+                    } else {
+                        message = "User already exists!".into();
                     }
                 } else if req.step_type == "init" {
                     success = true;
@@ -215,9 +190,46 @@ impl AuthService for XAuthCoreService {
                     false
                 };
 
-                if !has_2fa {
-                    success = true;
-                    step_completed = true;
+                if !has_2fa && req.step_type == "init" {
+                    let u = user
+                        .as_ref()
+                        .ok_or_else(|| Status::internal("User not found"))?;
+                    let secret = totp_rs::Secret::generate_secret();
+                    let totp = totp_rs::TOTP::new(
+                        totp_rs::Algorithm::SHA1,
+                        6,
+                        1,
+                        30,
+                        secret
+                            .to_bytes()
+                            .map_err(|_| Status::internal("Secret error"))?,
+                    )
+                    .map_err(|_| Status::internal("TOTP generation failed"))?;
+                    let otpauth_uri = format!(
+                        "otpauth://totp/{}:{}?secret={}&issuer={}",
+                        "xauthd",
+                        &req.username,
+                        totp.get_secret_base32(),
+                        "xauthd"
+                    );
+                    let new_flow_token = crate::jwt::generate_flow_token(
+                        &req.username,
+                        &chain_name,
+                        step_index,
+                        &self.settings.jwt.secret,
+                        600,
+                    )
+                    .map_err(|_| Status::internal("Token failed"))?;
+                    repo.set_totp_secret(u.id, &totp.get_secret_base32())
+                        .await
+                        .map_err(|_| Status::internal("Failed to save TOTP secret"))?;
+                    return Ok(Response::new(AuthStepResponse {
+                        success: true,
+                        message: otpauth_uri,
+                        next_action: "require_totp".into(),
+                        session_token: "".into(),
+                        flow_token: new_flow_token,
+                    }));
                 } else if req.step_type == "totp" {
                     let user = user
                         .as_ref()
