@@ -4,7 +4,7 @@ use axum::{
     Json,
 };
 use crate::db::UserRepository;
-use super::{dto::IntrospectRequest, state::AppState};
+use crate::transport::web::{dto::IntrospectRequest, state::AppState};
 
 pub async fn introspect_post(
     State(state): State<AppState>,
