@@ -235,7 +235,7 @@ Returns the OIDC discovery document.
   "jwks_uri": "http://localhost:8080/jwks",
   "scopes_supported": ["openid", "profile"],
   "response_types_supported": ["code"],
-  "grant_types_supported": ["authorization_code"],
+  "grant_types_supported": ["authorization_code", "refresh_token"],
   "id_token_signing_alg_values_supported": ["RS256"]
 }
 ```
@@ -299,7 +299,11 @@ Approves or denies the scope access request.
 
 #### `POST /token`
 
-Exchanges an authorization code for access and refresh tokens. This should be a server-to-server request.
+Handles the OAuth2 token endpoint. Supports two grant types: `authorization_code` (exchange code for tokens) and `refresh_token` (exchange refresh token for new tokens). This should be a server-to-server request.
+
+##### `grant_type=authorization_code`
+
+Exchanges an authorization code for access and refresh tokens.
 
 - **Form Parameters:**
   - `grant_type` (required): `authorization_code`.
@@ -320,8 +324,31 @@ Exchanges an authorization code for access and refresh tokens. This should be a 
   ```
 - **On Failure:**
   - `invalid_client` (401): Invalid `client_id` or `client_secret`.
-  - `unsupported_grant_type` (400): `grant_type` is not `authorization_code`.
   - `invalid_grant` (400): Invalid or expired code, or PKCE verification failed.
+
+##### `grant_type=refresh_token`
+
+Exchanges a refresh token for a new access token and a new refresh token (rotation: the old refresh token is invalidated).
+
+- **Form Parameters:**
+  - `grant_type` (required): `refresh_token`.
+  - `refresh_token` (required): The refresh token obtained previously.
+  - `client_id` (required): The client ID.
+  - `client_secret` (required): The client secret.
+- **On Success:** Returns a JSON object with the new tokens.
+  ```json
+  {
+    "access_token": "...",
+    "token_type": "Bearer",
+    "expires_in": 3600,
+    "refresh_token": "...",
+    "id_token": "..."
+  }
+  ```
+- **On Failure:**
+  - `invalid_client` (401): Invalid `client_id` or `client_secret`.
+  - `invalid_request` (400): Missing `refresh_token` parameter.
+  - `invalid_grant` (400): Refresh token is invalid, expired, revoked, or was issued to another client.
 
 #### `GET /user`
 
