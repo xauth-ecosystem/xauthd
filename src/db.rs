@@ -170,12 +170,12 @@ impl UserRepository {
     }
 
     pub async fn is_2fa_enabled(&self, user_id: i64) -> Result<bool, DbErr> {
-        let user = users::Entity::find_by_id(user_id).one(&self.db).await?;
+        let user = Entity::find_by_id(user_id).one(&self.db).await?;
         Ok(user.map(|u| u.totp_secret.is_some()).unwrap_or(false))
     }
 
     pub async fn set_totp_secret(&self, user_id: i64, secret: &str) -> Result<(), DbErr> {
-        let update = users::ActiveModel {
+        let update = ActiveModel {
             id: Set(user_id),
             totp_secret: Set(Some(secret.to_owned())),
             ..Default::default()
