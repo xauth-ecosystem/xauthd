@@ -27,6 +27,17 @@ pub struct FlowClaims {
     pub exp: usize,
 }
 
+/// Generates a short-lived HS256 token that tracks progress through a
+/// multi-step auth flow (e.g. the `login` or `register` chains).
+///
+/// # Examples
+///
+/// ```
+/// use xauth_core::jwt::generate_flow_token;
+///
+/// let token = generate_flow_token("alice", "login", 0, "secret", 600).unwrap();
+/// assert!(!token.is_empty());
+/// ```
 pub fn generate_flow_token(
     username: &str,
     chain: &str,
@@ -53,6 +64,23 @@ pub fn generate_flow_token(
     )
 }
 
+/// Validates a token produced by [`generate_flow_token`] and returns its claims.
+///
+/// Allows 60 seconds of clock leeway; returns an error if the token is expired,
+/// malformed, or signed with a different secret.
+///
+/// # Examples
+///
+/// ```
+/// use xauth_core::jwt::{generate_flow_token, validate_flow_token};
+///
+/// let token = generate_flow_token("alice", "login", 2, "secret", 600).unwrap();
+/// let claims = validate_flow_token(&token, "secret").unwrap();
+///
+/// assert_eq!(claims.sub, "alice");
+/// assert_eq!(claims.chain, "login");
+/// assert_eq!(claims.step_index, 2);
+/// ```
 pub fn validate_flow_token(token: &str, secret: &str) -> Result<FlowClaims, Error> {
     let validation = Validation {
         leeway: 60,
@@ -68,6 +96,20 @@ pub fn validate_flow_token(token: &str, secret: &str) -> Result<FlowClaims, Erro
     Ok(token_data.claims)
 }
 
+/// Loads the RSA private key stored at `path` (PKCS#8 PEM), or generates a new
+/// 2048-bit key and writes it to `path` if the file doesn't exist or can't be
+/// parsed.
+///
+/// # Examples
+///
+/// Not run as a doctest since it reads and writes a real file on disk; the
+/// snippet below is checked for compilation only.
+///
+/// ```no_run
+/// use xauth_core::jwt::get_or_create_rsa_key;
+///
+/// let key = get_or_create_rsa_key("/var/lib/xauthd/rsa_key.pem");
+/// ```
 pub fn get_or_create_rsa_key(path: &str) -> RsaPrivateKey {
     if let Ok(pem) = fs::read_to_string(path) {
         if let Ok(key) = RsaPrivateKey::from_pkcs8_pem(&pem) {
@@ -85,6 +127,22 @@ pub fn get_or_create_rsa_key(path: &str) -> RsaPrivateKey {
     priv_key
 }
 
+/// Builds a JWKS (JSON Web Key Set) document exposing the public half of
+/// `priv_key`, suitable for serving at a `/jwks` discovery endpoint.
+///
+/// # Examples
+///
+/// ```
+/// use rsa::RsaPrivateKey;
+/// use xauth_core::jwt::get_jwks;
+///
+/// let mut rng = rand_core::OsRng;
+/// let priv_key = RsaPrivateKey::new(&mut rng, 2048).unwrap();
+///
+/// let jwks = get_jwks(&priv_key);
+/// assert_eq!(jwks["keys"][0]["kty"], "RSA");
+/// assert_eq!(jwks["keys"][0]["alg"], "RS256");
+/// ```
 pub fn get_jwks(priv_key: &RsaPrivateKey) -> serde_json::Value {
     let pub_key = RsaPublicKey::from(priv_key);
     let n = pub_key.n().to_bytes_be();
@@ -106,6 +164,19 @@ pub fn get_jwks(priv_key: &RsaPrivateKey) -> serde_json::Value {
     })
 }
 
+/// Generates an HS256 JWT for `username`, valid for `expiration_seconds`.
+///
+/// Kept alongside [`generate_rs256_jwt`] for endpoints (like the OAuth
+/// authorization code) that don't need asymmetric signing.
+///
+/// # Examples
+///
+/// ```
+/// use xauth_core::jwt::generate_jwt;
+///
+/// let token = generate_jwt("alice", "secret", 3600).unwrap();
+/// assert!(!token.is_empty());
+/// ```
 pub fn generate_jwt(
     username: &str,
     secret: &str,
@@ -134,6 +205,21 @@ pub fn generate_jwt(
     encode(&header, &claims, &EncodingKey::from_secret(secret.as_ref()))
 }
 
+/// Generates an RS256-signed JWT for `username`, optionally embedding an OIDC
+/// `nonce`, using the given RSA private key.
+///
+/// # Examples
+///
+/// ```
+/// use rsa::RsaPrivateKey;
+/// use xauth_core::jwt::generate_rs256_jwt;
+///
+/// let mut rng = rand_core::OsRng;
+/// let priv_key = RsaPrivateKey::new(&mut rng, 2048).unwrap();
+///
+/// let token = generate_rs256_jwt("alice", &priv_key, 3600, Some("nonce123".into())).unwrap();
+/// assert!(!token.is_empty());
+/// ```
 pub fn generate_rs256_jwt(
     username: &str,
     priv_key: &RsaPrivateKey,
@@ -170,6 +256,22 @@ pub fn generate_rs256_jwt(
     encode(&header, &claims, &encoding_key)
 }
 
+/// Validates an HS256 token produced by [`generate_jwt`] and returns its claims.
+///
+/// Allows 60 seconds of clock leeway; returns an error if the token is expired,
+/// malformed, or signed with a different secret.
+///
+/// # Examples
+///
+/// ```
+/// use xauth_core::jwt::{generate_jwt, validate_jwt};
+///
+/// let token = generate_jwt("alice", "secret", 3600).unwrap();
+/// let claims = validate_jwt(&token, "secret").unwrap();
+///
+/// assert_eq!(claims.sub, "alice");
+/// assert!(claims.nonce.is_none());
+/// ```
 pub fn validate_jwt(token: &str, secret: &str) -> Result<Claims, Error> {
     let validation = Validation {
         leeway: 60,
