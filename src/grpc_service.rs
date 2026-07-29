@@ -17,6 +17,12 @@ use tracing::info;
 
 type ClientSender = mpsc::Sender<Result<CoreCommand, Status>>;
 
+enum StepResult {
+    Skip,
+    Ok,
+    Fail(String),
+}
+
 pub struct XAuthCoreService {
     db: DatabaseConnection,
     settings: Arc<crate::config::Settings>,
