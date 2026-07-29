@@ -4,7 +4,7 @@ use axum::{
     Json,
 };
 use crate::db::UserRepository;
-use super::{dto::{LoginForm, LoginResponse}, state::AppState};
+use crate::transport::web::{dto::{LoginForm, LoginResponse}, state::AppState};
 
 pub async fn login_post(
     State(state): State<AppState>,
