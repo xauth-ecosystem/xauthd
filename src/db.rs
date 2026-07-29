@@ -441,24 +441,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_and_get_oauth_client() {
+    async fn test_token_blacklist() {
         let db = setup_test_db().await;
         let repo = UserRepository::new(db);
 
-        // Test creating client
-        let result = repo
-            .create_oauth_client("client_123", "secret_456", "http://localhost/callback")
-            .await;
-        assert!(result.is_ok(), "Failed to create OAuth client");
+        assert!(!repo.is_token_blacklisted("jti_123").await.unwrap());
 
-        // Test fetching client
-        let client = repo.get_oauth_client("client_123").await.unwrap();
-        assert!(client.is_some(), "Client not found");
+        repo.blacklist_token("jti_123", 9999999999).await.unwrap();
 
-        let client = client.unwrap();
-        assert_eq!(client.client_id, "client_123");
-        assert_eq!(client.client_secret, "secret_456");
-        assert_eq!(client.redirect_uris, "http://localhost/callback");
+        assert!(repo.is_token_blacklisted("jti_123").await.unwrap());
     }
 
     #[tokio::test]
@@ -487,6 +478,27 @@ mod tests {
             .await
             .unwrap();
         assert!(!is_non_existent, "Non-existent client should return false");
+    }
+
+    #[tokio::test]
+    async fn test_create_and_get_oauth_client() {
+        let db = setup_test_db().await;
+        let repo = UserRepository::new(db);
+
+        // Test creating client
+        let result = repo
+            .create_oauth_client("client_123", "secret_456", "http://localhost/callback")
+            .await;
+        assert!(result.is_ok(), "Failed to create OAuth client");
+
+        // Test fetching client
+        let client = repo.get_oauth_client("client_123").await.unwrap();
+        assert!(client.is_some(), "Client not found");
+
+        let client = client.unwrap();
+        assert_eq!(client.client_id, "client_123");
+        assert_eq!(client.client_secret, "secret_456");
+        assert_eq!(client.redirect_uris, "http://localhost/callback");
     }
 
     #[tokio::test]
@@ -587,17 +599,5 @@ mod tests {
 
         repo.delete_oauth_token("access_1").await.unwrap();
         assert!(repo.get_oauth_token("access_1").await.unwrap().is_none());
-    }
-
-    #[tokio::test]
-    async fn test_token_blacklist() {
-        let db = setup_test_db().await;
-        let repo = UserRepository::new(db);
-
-        assert!(!repo.is_token_blacklisted("jti_123").await.unwrap());
-
-        repo.blacklist_token("jti_123", 9999999999).await.unwrap();
-
-        assert!(repo.is_token_blacklisted("jti_123").await.unwrap());
     }
 }
