@@ -169,11 +169,22 @@ impl UserRepository {
             .await
     }
 
-    pub async fn is_2fa_enabled(&self, _user_id: i64) -> Result<bool, DbErr> {
-        Ok(false)
+    pub async fn is_2fa_enabled(&self, user_id: i64) -> Result<bool, DbErr> {
+        let user = users::Entity::find_by_id(user_id).one(&self.db).await?;
+        Ok(user.map(|u| u.totp_secret.is_some()).unwrap_or(false))
     }
 
-    pub async fn create_user(&self, username: &str, hash: &str) -> Result<(), DbErr> {
+    pub async fn set_totp_secret(&self, user_id: i64, secret: &str) -> Result<(), DbErr> {
+        let update = users::ActiveModel {
+            id: Set(user_id),
+            totp_secret: Set(Some(secret.to_owned())),
+            ..Default::default()
+        };
+        update.update(&self.db).await?;
+        Ok(())
+    }
+
+    pub async fn create_user(&self, username: &str, hash: &str) -> Result<i64, DbErr> {
         let new_user = ActiveModel {
             username: Set(username.to_owned()),
             password_hash: Set(hash.to_owned()),
@@ -182,8 +193,8 @@ impl UserRepository {
             must_change_password: Set(false),
             ..Default::default()
         };
-        new_user.insert(&self.db).await?;
-        Ok(())
+        let result = new_user.insert(&self.db).await?;
+        Ok(result.id)
     }
 
     pub async fn update_last_login(&self, user_id: i64, ip: &str) -> Result<(), DbErr> {
