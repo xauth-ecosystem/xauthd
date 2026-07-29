@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use sea_orm::{ConnectionTrait, Database, DatabaseConnection, Schema};
 use std::sync::Arc;
 use xauth_core::config::{
