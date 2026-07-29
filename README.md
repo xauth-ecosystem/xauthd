@@ -244,6 +244,21 @@ Returns the OIDC discovery document.
 
 Returns the RSA public keys in JWKS format.
 
+```json
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "alg": "RS256",
+      "use": "sig",
+      "kid": "default",
+      "n": "...",
+      "e": "..."
+    }
+  ]
+}
+```
+
 #### `GET /authorize`
 
 Renders the `login.html` template.
