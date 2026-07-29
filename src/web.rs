@@ -679,20 +679,20 @@ async fn introspect_post(
             .await
             .unwrap_or(false)
         {
-            let scope = repo
-                .get_oauth_token(&req.token)
-                .await
-                .ok()
-                .flatten()
-                .map(|t| t.scopes)
+            let oauth_token = repo.get_oauth_token(&req.token).await.ok().flatten();
+            let scope = oauth_token
+                .as_ref()
+                .map(|t| t.scopes.clone())
                 .unwrap_or_default();
-            let client_id = repo
-                .get_oauth_token(&req.token)
-                .await
-                .ok()
-                .flatten()
-                .map(|t| t.client_id)
+            let client_id = oauth_token
+                .as_ref()
+                .map(|t| t.client_id.clone())
                 .unwrap_or_default();
+            let is_refresh = req.token_type_hint.as_deref() == Some("refresh_token")
+                || oauth_token
+                    .as_ref()
+                    .map(|t| t.refresh_token.as_deref() == Some(&req.token))
+                    .unwrap_or(false);
             return (
                 axum::http::StatusCode::OK,
                 Json(serde_json::json!({
@@ -703,7 +703,7 @@ async fn introspect_post(
                     "iat": claims.iat,
                     "scope": scope,
                     "client_id": client_id,
-                    "token_type": "Bearer"
+                    "token_type": if is_refresh { "refresh_token" } else { "Bearer" }
                 })),
             )
                 .into_response();
@@ -736,10 +736,27 @@ async fn revoke_post(
 
     repo.delete_oauth_token(&req.token).await.ok();
 
-    if let Ok(claims) = crate::jwt::validate_jwt(&req.token, &state.settings.jwt.secret) {
-        repo.blacklist_token(&claims.jti, claims.exp as i64)
-            .await
-            .ok();
+    let hint = req.token_type_hint.as_deref();
+    if matches!(hint, Some("access_token")) {
+        if let Ok(claims) = crate::jwt::validate_jwt(&req.token, &state.settings.jwt.secret) {
+            repo.blacklist_token(&claims.jti, claims.exp as i64)
+                .await
+                .ok();
+        }
+    } else if matches!(hint, Some("refresh_token")) {
+        // Refresh tokens are deleted from oauth_tokens above; blacklist JTI too
+        if let Ok(claims) = crate::jwt::validate_jwt(&req.token, &state.settings.jwt.secret) {
+            repo.blacklist_token(&claims.jti, claims.exp as i64)
+                .await
+                .ok();
+        }
+    } else {
+        // No hint or unknown hint: current behavior — delete row and blacklist JTI
+        if let Ok(claims) = crate::jwt::validate_jwt(&req.token, &state.settings.jwt.secret) {
+            repo.blacklist_token(&claims.jti, claims.exp as i64)
+                .await
+                .ok();
+        }
     }
 
     axum::http::StatusCode::OK.into_response()
