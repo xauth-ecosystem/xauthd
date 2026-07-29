@@ -415,6 +415,8 @@ Revokes an access or refresh token.
 
 To connect your PocketMine-MP (PHP) or Nukkit/Spigot/Paper (Java) plugin to `xauthd`, generate gRPC client stubs from `proto/xauth.proto`. See [docs/code-generation.md](docs/code-generation.md) for setup instructions.
 
+For a detailed specification of the bidirectional `ConnectServer` stream, supported events, and expected JSON payloads, refer to the [gRPC Protocol Specification](docs/grpc-protocol.md).
+
 ## Contributing
 
 Contributions are welcome and appreciated! Here's how you can contribute:
