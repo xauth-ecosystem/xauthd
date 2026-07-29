@@ -1189,4 +1189,95 @@ mod tests {
             "Token should be blacklisted after revocation"
         );
     }
+
+    #[tokio::test]
+    async fn test_generate_o_auth_token() {
+        let db = setup_test_db().await;
+        let settings = get_test_settings();
+        let repo = UserRepository::new(db.clone());
+
+        repo.create_oauth_client("my_client", "my_secret", "http://localhost/callback")
+            .await
+            .unwrap();
+        repo.create_user("oauth_user2", "hash").await.unwrap();
+
+        let sub = serde_json::to_string(&serde_json::json!({
+            "u": "oauth_user2",
+            "c": "my_client",
+            "r": "http://localhost/callback"
+        }))
+        .unwrap();
+
+        let code = crate::jwt::generate_jwt(&sub, &settings.jwt.secret, settings.jwt.auth_code_ttl)
+            .unwrap();
+
+        let service = XAuthCoreService::new(db, settings.clone());
+
+        let req = Request::new(OAuthTokenRequest {
+            client_id: "my_client".into(),
+            client_secret: "my_secret".into(),
+            code,
+            redirect_uri: "http://localhost/callback".into(),
+        });
+
+        let resp = service
+            .generate_o_auth_token(req)
+            .await
+            .unwrap()
+            .into_inner();
+        assert!(resp.success);
+        assert!(!resp.access_token.is_empty());
+        assert!(!resp.refresh_token.is_empty());
+        assert!(resp.expires_in > 0);
+    }
+
+    #[tokio::test]
+    async fn test_generate_o_auth_token_invalid_client() {
+        let db = setup_test_db().await;
+        let settings = get_test_settings();
+        let service = XAuthCoreService::new(db, settings);
+
+        let req = Request::new(OAuthTokenRequest {
+            client_id: "bad_client".into(),
+            client_secret: "bad_secret".into(),
+            code: "some_code".into(),
+            redirect_uri: "http://localhost/callback".into(),
+        });
+
+        let resp = service
+            .generate_o_auth_token(req)
+            .await
+            .unwrap()
+            .into_inner();
+        assert!(!resp.success);
+        assert_eq!(resp.error, "invalid_client");
+    }
+
+    #[tokio::test]
+    async fn test_generate_o_auth_token_invalid_code() {
+        let db = setup_test_db().await;
+        let settings = get_test_settings();
+        let repo = UserRepository::new(db.clone());
+
+        repo.create_oauth_client("my_client2", "my_secret2", "http://localhost/callback")
+            .await
+            .unwrap();
+
+        let service = XAuthCoreService::new(db, settings);
+
+        let req = Request::new(OAuthTokenRequest {
+            client_id: "my_client2".into(),
+            client_secret: "my_secret2".into(),
+            code: "not_a_valid_jwt".into(),
+            redirect_uri: "http://localhost/callback".into(),
+        });
+
+        let resp = service
+            .generate_o_auth_token(req)
+            .await
+            .unwrap()
+            .into_inner();
+        assert!(!resp.success);
+        assert_eq!(resp.error, "invalid_grant");
+    }
 }
