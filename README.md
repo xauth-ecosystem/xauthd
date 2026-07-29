@@ -354,14 +354,19 @@ Exchanges a refresh token for a new access token and a new refresh token (rotati
 
 Returns user information for a valid access token.
 
+If the token contains custom data scopes (e.g., `economy:balance`, `guilds:name`) that `xauthd` does not store internally, the daemon performs **Dynamic Scope Resolution** via gRPC.
+
+- **Dynamic Scope Resolution:** `xauthd` pauses the HTTP request and broadcasts a `FETCH_SCOPES` command to connected game servers. The game server resolves the requested scopes from memory and pushes the data back via `SCOPE_DATA_RESPONSE`. This data is then merged into the final JSON payload. (Timeout: 3 seconds).
 - **Headers:**
   - `Authorization: Bearer <access_token>`
-- **On Success:** Returns a JSON object with the user info.
+- **On Success:** Returns a JSON object with the user info and any dynamically resolved scopes.
   ```json
   {
     "sub": "player1",
     "preferred_username": "player1",
-    "name": "player1"
+    "name": "player1",
+    "economy:balance": 1500.50,
+    "guilds:name": "Warriors"
   }
   ```
 - **On Failure:**
