@@ -118,7 +118,7 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 .serve(addr);
 
             let web_app =
-                xauth_core::web::router(db.clone(), settings_arc, grpc_clients, pending_scopes);
+                xauth_core::transport::web::router(db.clone(), settings_arc, grpc_clients, pending_scopes);
 
             let web_listener = tokio::net::TcpListener::bind(&settings.network.web_address).await?;
             info!(
