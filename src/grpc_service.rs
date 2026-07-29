@@ -688,50 +688,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_player_info_not_found() {
-        let db = setup_test_db().await;
-        let settings = get_test_settings();
-        let service = XAuthCoreService::new(db, settings);
-
-        let req = Request::new(PlayerInfoRequest {
-            target_username: "unknown".into(),
-            requestor_id: "admin".into(),
-        });
-
-        let resp = service.get_player_info(req).await.unwrap().into_inner();
-        assert!(!resp.exists);
-        assert_eq!(resp.username, "unknown");
-    }
-
-    #[tokio::test]
-    async fn test_get_player_info_exists() {
-        let db = setup_test_db().await;
-
-        let new_user = crate::db::ActiveModel {
-            username: Set("known_user".into()),
-            password_hash: Set("hash".into()),
-            failed_attempts: Set(0),
-            is_banned: Set(true),
-            must_change_password: Set(false),
-            ..Default::default()
-        };
-        new_user.insert(&db).await.unwrap();
-
-        let settings = get_test_settings();
-        let service = XAuthCoreService::new(db, settings);
-
-        let req = Request::new(PlayerInfoRequest {
-            target_username: "known_user".into(),
-            requestor_id: "admin".into(),
-        });
-
-        let resp = service.get_player_info(req).await.unwrap().into_inner();
-        assert!(resp.exists);
-        assert_eq!(resp.username, "known_user");
-        assert!(resp.is_banned);
-    }
-
-    #[tokio::test]
     async fn test_process_auth_step_password_correct() {
         let db = setup_test_db().await;
         let settings = get_test_settings();
@@ -1084,113 +1040,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_force_password_change() {
-        let db = setup_test_db().await;
-
-        let new_user = crate::db::ActiveModel {
-            username: Set("force_pw_player".into()),
-            password_hash: Set("hash".into()),
-            failed_attempts: Set(0),
-            is_banned: Set(false),
-            must_change_password: Set(false),
-            ..Default::default()
-        };
-        new_user.insert(&db).await.unwrap();
-
-        let settings = get_test_settings();
-        let service = XAuthCoreService::new(db.clone(), settings.clone());
-
-        let req = Request::new(ForcePasswordChangeRequest {
-            target_username: "force_pw_player".into(),
-            immediate_kick: false,
-        });
-
-        let resp = service
-            .force_password_change(req)
-            .await
-            .unwrap()
-            .into_inner();
-        assert!(resp.success);
-
-        let repo = UserRepository::new(db);
-        let user = repo
-            .get_user_by_name("force_pw_player")
-            .await
-            .unwrap()
-            .unwrap();
-        assert!(user.must_change_password);
-    }
-
-    #[tokio::test]
-    async fn test_force_password_change_user_not_found() {
-        let db = setup_test_db().await;
-        let settings = get_test_settings();
-        let service = XAuthCoreService::new(db, settings);
-
-        let req = Request::new(ForcePasswordChangeRequest {
-            target_username: "nonexistent".into(),
-            immediate_kick: false,
-        });
-
-        let resp = service
-            .force_password_change(req)
-            .await
-            .unwrap()
-            .into_inner();
-        assert!(!resp.success);
-    }
-
-    #[tokio::test]
-    async fn test_revoke_o_auth_token() {
-        let db = setup_test_db().await;
-        let settings = get_test_settings();
-        let repo = UserRepository::new(db.clone());
-
-        repo.create_oauth_client("client1", "secret1", "http://localhost")
-            .await
-            .unwrap();
-        repo.create_user("oauth_user", "hash").await.unwrap();
-
-        let token = crate::jwt::generate_jwt(
-            "oauth_user",
-            &settings.jwt.secret,
-            settings.jwt.access_token_ttl,
-        )
-        .unwrap();
-
-        repo.create_oauth_token(
-            "client1",
-            repo.get_user_by_name("oauth_user")
-                .await
-                .unwrap()
-                .unwrap()
-                .id,
-            &token,
-            None,
-            settings.jwt.access_token_ttl as i64,
-            "openid",
-        )
-        .await
-        .unwrap();
-
-        let service = XAuthCoreService::new(db.clone(), settings.clone());
-
-        let req = Request::new(OAuthRevokeRequest {
-            token: token.clone(),
-            client_id: "client1".into(),
-        });
-
-        let resp = service.revoke_o_auth_token(req).await.unwrap().into_inner();
-        assert!(resp.success);
-
-        let claims = crate::jwt::validate_jwt(&token, &settings.jwt.secret).unwrap();
-        assert!(
-            repo.is_token_blacklisted(&claims.jti).await.unwrap(),
-            "Token should be blacklisted after revocation"
-        );
-    }
-
-    #[tokio::test]
     async fn test_generate_o_auth_token() {
         let db = setup_test_db().await;
         let settings = get_test_settings();
@@ -1279,5 +1128,156 @@ mod tests {
             .into_inner();
         assert!(!resp.success);
         assert_eq!(resp.error, "invalid_grant");
+    }
+
+    #[tokio::test]
+    async fn test_revoke_o_auth_token() {
+        let db = setup_test_db().await;
+        let settings = get_test_settings();
+        let repo = UserRepository::new(db.clone());
+
+        repo.create_oauth_client("client1", "secret1", "http://localhost")
+            .await
+            .unwrap();
+        repo.create_user("oauth_user", "hash").await.unwrap();
+
+        let token = crate::jwt::generate_jwt(
+            "oauth_user",
+            &settings.jwt.secret,
+            settings.jwt.access_token_ttl,
+        )
+        .unwrap();
+
+        repo.create_oauth_token(
+            "client1",
+            repo.get_user_by_name("oauth_user")
+                .await
+                .unwrap()
+                .unwrap()
+                .id,
+            &token,
+            None,
+            settings.jwt.access_token_ttl as i64,
+            "openid",
+        )
+        .await
+        .unwrap();
+
+        let service = XAuthCoreService::new(db.clone(), settings.clone());
+
+        let req = Request::new(OAuthRevokeRequest {
+            token: token.clone(),
+            client_id: "client1".into(),
+        });
+
+        let resp = service.revoke_o_auth_token(req).await.unwrap().into_inner();
+        assert!(resp.success);
+
+        let claims = crate::jwt::validate_jwt(&token, &settings.jwt.secret).unwrap();
+        assert!(
+            repo.is_token_blacklisted(&claims.jti).await.unwrap(),
+            "Token should be blacklisted after revocation"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_player_info_not_found() {
+        let db = setup_test_db().await;
+        let settings = get_test_settings();
+        let service = XAuthCoreService::new(db, settings);
+
+        let req = Request::new(PlayerInfoRequest {
+            target_username: "unknown".into(),
+            requestor_id: "admin".into(),
+        });
+
+        let resp = service.get_player_info(req).await.unwrap().into_inner();
+        assert!(!resp.exists);
+        assert_eq!(resp.username, "unknown");
+    }
+
+    #[tokio::test]
+    async fn test_get_player_info_exists() {
+        let db = setup_test_db().await;
+
+        let new_user = crate::db::ActiveModel {
+            username: Set("known_user".into()),
+            password_hash: Set("hash".into()),
+            failed_attempts: Set(0),
+            is_banned: Set(true),
+            must_change_password: Set(false),
+            ..Default::default()
+        };
+        new_user.insert(&db).await.unwrap();
+
+        let settings = get_test_settings();
+        let service = XAuthCoreService::new(db, settings);
+
+        let req = Request::new(PlayerInfoRequest {
+            target_username: "known_user".into(),
+            requestor_id: "admin".into(),
+        });
+
+        let resp = service.get_player_info(req).await.unwrap().into_inner();
+        assert!(resp.exists);
+        assert_eq!(resp.username, "known_user");
+        assert!(resp.is_banned);
+    }
+
+    #[tokio::test]
+    async fn test_force_password_change() {
+        let db = setup_test_db().await;
+
+        let new_user = crate::db::ActiveModel {
+            username: Set("force_pw_player".into()),
+            password_hash: Set("hash".into()),
+            failed_attempts: Set(0),
+            is_banned: Set(false),
+            must_change_password: Set(false),
+            ..Default::default()
+        };
+        new_user.insert(&db).await.unwrap();
+
+        let settings = get_test_settings();
+        let service = XAuthCoreService::new(db.clone(), settings.clone());
+
+        let req = Request::new(ForcePasswordChangeRequest {
+            target_username: "force_pw_player".into(),
+            immediate_kick: false,
+        });
+
+        let resp = service
+            .force_password_change(req)
+            .await
+            .unwrap()
+            .into_inner();
+        assert!(resp.success);
+
+        let repo = UserRepository::new(db);
+        let user = repo
+            .get_user_by_name("force_pw_player")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(user.must_change_password);
+    }
+
+    #[tokio::test]
+    async fn test_force_password_change_user_not_found() {
+        let db = setup_test_db().await;
+        let settings = get_test_settings();
+        let service = XAuthCoreService::new(db, settings);
+
+        let req = Request::new(ForcePasswordChangeRequest {
+            target_username: "nonexistent".into(),
+            immediate_kick: false,
+        });
+
+        let resp = service
+            .force_password_change(req)
+            .await
+            .unwrap()
+            .into_inner();
+        assert!(!resp.success);
     }
 }
