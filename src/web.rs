@@ -677,13 +677,21 @@ async fn introspect_post(
             .await
             .unwrap_or(false)
         {
+            let scope = repo
+                .get_oauth_token(&req.token)
+                .await
+                .ok()
+                .flatten()
+                .map(|t| t.scopes)
+                .unwrap_or_default();
             return (
                 axum::http::StatusCode::OK,
                 Json(serde_json::json!({
                     "active": true,
                     "sub": claims.sub,
                     "exp": claims.exp,
-                    "iat": claims.iat
+                    "iat": claims.iat,
+                    "scope": scope
                 })),
             )
                 .into_response();
