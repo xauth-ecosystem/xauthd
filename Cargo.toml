@@ -35,3 +35,6 @@ totp-rs = { version = "5.7.2", features = ["gen_secret"] }
 
 [build-dependencies]
 tonic-prost-build = "0.14"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

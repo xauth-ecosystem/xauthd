@@ -4488,6 +4488,7 @@ dependencies = [
  "tonic-prost",
  "tonic-prost-build",
  "totp-rs",
+ "tower",
  "tower-http",
  "tracing",
  "tracing-subscriber",
