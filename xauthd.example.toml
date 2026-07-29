@@ -65,6 +65,11 @@ max_failed_attempts = 5
 # Default: 900 (15 minutes).
 failed_attempts_reset_interval = 900
 
+[totp]
+# If true, the totp step in the login chain is enforced.
+# Players without2FA will be forced to set it up.
+required = false
+
 [auth_flow]
 # Order of authentication steps for players who are not registered yet
 register_chain = ["captcha", "register"]
