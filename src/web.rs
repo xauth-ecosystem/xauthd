@@ -95,7 +95,8 @@ struct TokenResponse {
     token_type: String,
     expires_in: usize,
     refresh_token: String,
-    id_token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    id_token: Option<String>,
 }
 
 struct AppStateInner {
@@ -441,21 +442,28 @@ async fn token_post(
                             state.settings.jwt.refresh_token_ttl,
                         )
                         .unwrap();
-                        let n = data["n"].as_str().unwrap_or_default();
-                        let nonce_opt = if n.is_empty() {
-                            None
-                        } else {
-                            Some(n.to_string())
-                        };
-                        let id_token = crate::jwt::generate_rs256_jwt(
-                            u,
-                            &state.rsa_key,
-                            state.settings.jwt.access_token_ttl,
-                            nonce_opt,
-                        )
-                        .unwrap();
 
                         let scopes = data["s"].as_str().unwrap_or("");
+                        let id_token = if scopes.split_whitespace().any(|s| s == "openid") {
+                            let n = data["n"].as_str().unwrap_or_default();
+                            let nonce_opt = if n.is_empty() {
+                                None
+                            } else {
+                                Some(n.to_string())
+                            };
+                            Some(
+                                crate::jwt::generate_rs256_jwt(
+                                    u,
+                                    &state.rsa_key,
+                                    state.settings.jwt.access_token_ttl,
+                                    nonce_opt,
+                                )
+                                .unwrap(),
+                            )
+                        } else {
+                            None
+                        };
+
                         repo.create_oauth_token(
                             &req.client_id,
                             user.id,
@@ -576,13 +584,23 @@ async fn token_post(
         .await
         .ok();
 
-        let id_token = crate::jwt::generate_rs256_jwt(
-            &username,
-            &state.rsa_key,
-            state.settings.jwt.access_token_ttl,
-            None,
-        )
-        .unwrap();
+        let id_token = if existing_token
+            .scopes
+            .split_whitespace()
+            .any(|s| s == "openid")
+        {
+            Some(
+                crate::jwt::generate_rs256_jwt(
+                    &username,
+                    &state.rsa_key,
+                    state.settings.jwt.access_token_ttl,
+                    None,
+                )
+                .unwrap(),
+            )
+        } else {
+            None
+        };
 
         Json(TokenResponse {
             access_token: new_access_token,
