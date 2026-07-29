@@ -572,6 +572,7 @@ mod tests {
         SecuritySettings, Settings, TotpSettings, WebSettings,
     };
     use crate::db::Entity as UserEntity;
+    use crate::db::{oauth_clients, oauth_tokens, sessions, token_blacklist};
     use sea_orm::{ActiveModelTrait, ConnectionTrait, Database, Schema, Set};
 
     async fn setup_test_db() -> DatabaseConnection {
@@ -579,8 +580,17 @@ mod tests {
         let builder = db.get_database_backend();
         let schema = Schema::new(builder);
 
-        let stmt = schema.create_table_from_entity(UserEntity);
-        db.execute(&stmt).await.unwrap();
+        let stmts = vec![
+            schema.create_table_from_entity(UserEntity),
+            schema.create_table_from_entity(sessions::Entity),
+            schema.create_table_from_entity(token_blacklist::Entity),
+            schema.create_table_from_entity(oauth_clients::Entity),
+            schema.create_table_from_entity(oauth_tokens::Entity),
+        ];
+
+        for stmt in stmts {
+            db.execute(&stmt).await.unwrap();
+        }
 
         db
     }
@@ -981,5 +991,47 @@ mod tests {
         let resp = service.process_auth_step(req).await.unwrap().into_inner();
         assert!(resp.success);
         assert!(!resp.flow_token.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_validate_session() {
+        let db = setup_test_db().await;
+        let settings = get_test_settings();
+        let repo = UserRepository::new(db.clone());
+
+        repo.create_user("session_user", "hash").await.unwrap();
+        let user = repo
+            .get_user_by_name("session_user")
+            .await
+            .unwrap()
+            .unwrap();
+
+        let token = crate::jwt::generate_jwt(
+            "session_user",
+            &settings.jwt.secret,
+            settings.jwt.session_ttl,
+        )
+        .unwrap();
+
+        repo.create_session(
+            user.id,
+            &token,
+            "127.0.0.1",
+            settings.jwt.session_ttl as i64,
+        )
+        .await
+        .unwrap();
+
+        let service = XAuthCoreService::new(db, settings);
+
+        let req = Request::new(SessionRequest {
+            session_token: token,
+            ip_address: "127.0.0.1".into(),
+        });
+
+        let resp = service.validate_session(req).await.unwrap().into_inner();
+        assert!(resp.is_valid);
+        assert_eq!(resp.username, "session_user");
+        assert!(resp.expires_at > 0);
     }
 }
