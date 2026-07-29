@@ -352,6 +352,7 @@ async fn consent_post(
             "u": username,
             "c": f.client_id,
             "r": f.redirect_uri,
+            "s": f.scope,
             "cc": f.code_challenge,
             "ccm": f.code_challenge_method,
             "n": f.nonce
