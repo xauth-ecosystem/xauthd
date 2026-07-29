@@ -760,4 +760,42 @@ mod tests {
         assert!(!resp.session_token.is_empty());
         assert!(resp.flow_token.is_empty());
     }
+
+    #[tokio::test]
+    async fn test_process_auth_step_password_incorrect() {
+        let db = setup_test_db().await;
+        let settings = get_test_settings();
+        let password_hash =
+            crate::hash::hash_password("correct_password", &settings.password_hashing).unwrap();
+
+        let new_user = crate::db::ActiveModel {
+            username: Set("player2".into()),
+            password_hash: Set(password_hash),
+            failed_attempts: Set(0),
+            is_banned: Set(false),
+            must_change_password: Set(false),
+            ..Default::default()
+        };
+        new_user.insert(&db).await.unwrap();
+
+        let service = XAuthCoreService::new(db, settings.clone());
+
+        let flow_token =
+            crate::jwt::generate_flow_token("player2", "login", 0, &settings.jwt.secret, 600)
+                .unwrap();
+
+        let req = Request::new(AuthStepRequest {
+            username: "player2".into(),
+            step_type: "password".into(),
+            input_data: "wrong_password".into(),
+            ip_address: "127.0.0.1".into(),
+            flow_token,
+            server_id: "test_server".into(),
+        });
+
+        let resp = service.process_auth_step(req).await.unwrap().into_inner();
+        assert!(!resp.success);
+        assert_eq!(resp.message, "Invalid password!");
+        assert!(!resp.flow_token.is_empty());
+    }
 }
