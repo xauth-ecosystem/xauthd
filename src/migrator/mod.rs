@@ -5,6 +5,7 @@ mod m20260727_000002_create_token_blacklist;
 mod m20260727_000003_create_oauth_clients;
 mod m20260727_000004_create_sessions_table;
 mod m20260727_000005_create_oauth_tokens_table;
+mod m20260729_000006_add_totp_secret;
 
 pub struct Migrator;
 
