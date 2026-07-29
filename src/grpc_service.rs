@@ -244,32 +244,21 @@ impl AuthService for XAuthCoreService {
         request: Request<PlayerInfoRequest>,
     ) -> Result<Response<PlayerInfoResponse>, Status> {
         let req = request.into_inner();
-        let repo = UserRepository::new(self.db.clone());
+        let svc = crate::services::user_info::UserInfoService::new(
+            UserRepository::new(self.db.clone()),
+        );
 
-        match repo.get_user_by_name(&req.target_username).await {
-            Ok(Some(user)) => {
-                let has_2fa = repo.is_2fa_enabled(user.id).await.unwrap_or(false);
-
-                Ok(Response::new(PlayerInfoResponse {
-                    exists: true,
-                    username: user.username.clone(),
-                    is_banned: user.is_banned,
-                    has_2fa,
-                    last_ip: user.last_ip.unwrap_or_default(),
-                    last_login: user.last_login.unwrap_or(0),
-                    failed_attempts: user.failed_attempts,
-                }))
-            }
-            Ok(None) => Ok(Response::new(PlayerInfoResponse {
-                exists: false,
-                username: req.target_username,
-                is_banned: false,
-                has_2fa: false,
-                last_ip: "".into(),
-                last_login: 0,
-                failed_attempts: 0,
+        match svc.get_player_info(&req.target_username).await {
+            Ok(info) => Ok(Response::new(PlayerInfoResponse {
+                exists: info.exists,
+                username: info.username,
+                is_banned: info.is_banned,
+                has_2fa: info.has_2fa,
+                last_ip: info.last_ip,
+                last_login: info.last_login,
+                failed_attempts: info.failed_attempts,
             })),
-            Err(_) => Err(Status::internal("Database error")),
+            Err(e) => Err(Status::internal(e)),
         }
     }
 
@@ -278,19 +267,18 @@ impl AuthService for XAuthCoreService {
         request: Request<ForcePasswordChangeRequest>,
     ) -> Result<Response<ForcePasswordChangeResponse>, Status> {
         let req = request.into_inner();
-        let repo = UserRepository::new(self.db.clone());
+        let svc = crate::services::user_info::UserInfoService::new(
+            UserRepository::new(self.db.clone()),
+        );
 
-        match repo.get_user_by_name(&req.target_username).await {
-            Ok(Some(user)) => {
-                repo.set_must_change_password(user.id, true).await.ok();
-
+        match svc.force_password_change(&req.target_username).await {
+            Ok(true) => {
                 if req.immediate_kick {
                     let cmd = CoreCommand {
                         r#type: CommandType::KickPlayer as i32,
                         target_username: req.target_username.clone(),
                         payload: "You must change your password. Please re-login.".into(),
                     };
-
                     let clients_guard = self.clients.read().await;
                     for tx in clients_guard.values() {
                         let _ = tx.send(Ok(cmd.clone())).await;
@@ -298,10 +286,8 @@ impl AuthService for XAuthCoreService {
                 }
                 Ok(Response::new(ForcePasswordChangeResponse { success: true }))
             }
-            Ok(None) => Ok(Response::new(ForcePasswordChangeResponse {
-                success: false,
-            })),
-            Err(_) => Err(Status::internal("Database error")),
+            Ok(false) => Ok(Response::new(ForcePasswordChangeResponse { success: false })),
+            Err(e) => Err(Status::internal(e)),
         }
     }
 }
