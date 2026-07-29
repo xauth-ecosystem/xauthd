@@ -5,6 +5,26 @@ use argon2::{
 };
 use bcrypt::{hash as bcrypt_hash, verify as bcrypt_verify, DEFAULT_COST};
 
+/// Hashes a password using the algorithm selected in `config`.
+///
+/// `config.algorithm` of `"BCRYPT"` (case-insensitive) uses bcrypt; anything else
+/// falls back to Argon2id. Per-algorithm tuning (bcrypt cost, Argon2 memory/time/
+/// threads) can be supplied via `config.options`, otherwise sane defaults are used.
+///
+/// # Examples
+///
+/// ```
+/// use xauth_core::config::PasswordHashingSettings;
+/// use xauth_core::hash::hash_password;
+///
+/// let settings = PasswordHashingSettings {
+///     algorithm: "BCRYPT".to_string(),
+///     options: None,
+/// };
+///
+/// let hash = hash_password("hunter2", &settings).unwrap();
+/// assert!(hash.starts_with("$2"));
+/// ```
 pub fn hash_password(password: &str, config: &PasswordHashingSettings) -> Result<String, String> {
     if config.algorithm.eq_ignore_ascii_case("BCRYPT") {
         let cost = config
@@ -40,6 +60,27 @@ pub fn hash_password(password: &str, config: &PasswordHashingSettings) -> Result
     }
 }
 
+/// Verifies a plaintext password against a hash produced by [`hash_password`].
+///
+/// The hash format is auto-detected: bcrypt hashes (`$2a$`/`$2b$`/`$2y$` prefix)
+/// are checked with bcrypt, everything else is treated as Argon2.
+///
+/// # Examples
+///
+/// ```
+/// use xauth_core::config::PasswordHashingSettings;
+/// use xauth_core::hash::{hash_password, verify_password};
+///
+/// let settings = PasswordHashingSettings {
+///     algorithm: "BCRYPT".to_string(),
+///     options: None,
+/// };
+///
+/// let hash = hash_password("hunter2", &settings).unwrap();
+///
+/// assert!(verify_password("hunter2", &hash));
+/// assert!(!verify_password("wrong_password", &hash));
+/// ```
 pub fn verify_password(password: &str, expected_hash: &str) -> bool {
     if expected_hash.starts_with("$2y$")
         || expected_hash.starts_with("$2b$")
