@@ -380,8 +380,11 @@ Checks whether a token is active and returns its metadata.
   {
     "active": true,
     "sub": "player1",
+    "username": "player1",
     "exp": 1678886400,
-    "iat": 1678882800
+    "iat": 1678882800,
+    "scope": "openid profile",
+    "client_id": "my_client"
   }
   ```
 - **On Success (inactive):**
