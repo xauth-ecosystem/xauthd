@@ -170,11 +170,36 @@ impl AuthService for XAuthCoreService {
                         &self.settings.password_hashing,
                     )
                     .map_err(|_| Status::internal("Hash failed"))?;
-                    if repo.create_user(&req.username, &hash).await.is_ok() {
-                        success = true;
-                        step_completed = true;
-                    } else {
-                        message = "User already exists!".into();
+                    match repo.create_user(&req.username, &hash).await {
+                        Ok(user_id) => {
+                            let secret = totp_rs::Secret::generate_secret();
+                            let totp = totp_rs::TOTP::new(
+                                totp_rs::Algorithm::SHA1,
+                                6,
+                                1,
+                                30,
+                                secret
+                                    .to_bytes()
+                                    .map_err(|_| Status::internal("Secret error"))?,
+                            )
+                            .map_err(|_| Status::internal("TOTP generation failed"))?;
+                            let otpauth_uri = format!(
+                                "otpauth://totp/{}:{}?secret={}&issuer={}",
+                                "xauthd",
+                                &req.username,
+                                totp.get_secret_base32(),
+                                "xauthd"
+                            );
+                            repo.set_totp_secret(user_id, &totp.get_secret_base32())
+                                .await
+                                .map_err(|_| Status::internal("Failed to save TOTP secret"))?;
+                            message = otpauth_uri;
+                            success = true;
+                            step_completed = true;
+                        }
+                        Err(_) => {
+                            message = "User already exists!".into();
+                        }
                     }
                 } else if req.step_type == "init" {
                     success = true;
@@ -194,9 +219,33 @@ impl AuthService for XAuthCoreService {
                     success = true;
                     step_completed = true;
                 } else if req.step_type == "totp" {
-                    // TODO: actually verify totp code
-                    success = true;
-                    step_completed = true;
+                    let user = user
+                        .as_ref()
+                        .ok_or_else(|| Status::internal("User not found"))?;
+                    let secret_b32 = user
+                        .totp_secret
+                        .as_ref()
+                        .ok_or_else(|| Status::internal("2FA not configured"))?;
+                    let secret = totp_rs::Secret::Encoded(secret_b32.clone());
+                    let totp = totp_rs::TOTP::new(
+                        totp_rs::Algorithm::SHA1,
+                        6,
+                        1,
+                        30,
+                        secret
+                            .to_bytes()
+                            .map_err(|_| Status::internal("Invalid TOTP secret"))?,
+                    )
+                    .map_err(|_| Status::internal("TOTP init failed"))?;
+                    if totp
+                        .check_current(&req.input_data)
+                        .map_err(|_| Status::internal("TOTP verification error"))?
+                    {
+                        success = true;
+                        step_completed = true;
+                    } else {
+                        message = "Invalid TOTP code".into();
+                    }
                 } else if req.step_type == "init" {
                     success = true;
                 } else {
