@@ -17,12 +17,6 @@ use tracing::info;
 pub type ClientSender = mpsc::Sender<Result<CoreCommand, Status>>;
 pub type PendingScopeMap = Arc<RwLock<HashMap<String, oneshot::Sender<String>>>>;
 
-enum StepResult {
-    Skip,
-    Ok,
-    Fail(String),
-}
-
 pub struct XAuthCoreService {
     db: DatabaseConnection,
     settings: Arc<crate::config::Settings>,
@@ -196,13 +190,19 @@ impl AuthService for XAuthCoreService {
         request: Request<OAuthTokenRequest>,
     ) -> Result<Response<OAuthTokenResponse>, Status> {
         let req = request.into_inner();
-        let repo = UserRepository::new(self.db.clone());
+        let oauth = self.oauth_service();
 
-        if !repo
-            .validate_oauth_client(&req.client_id, &req.client_secret)
-            .await
-            .unwrap_or(false)
-        {
+        let token_req = crate::services::oauth::TokenRequest {
+            grant_type: "authorization_code".into(),
+            client_id: req.client_id.clone(),
+            client_secret: req.client_secret.clone(),
+            code: Some(req.code.clone()),
+            redirect_uri: Some(req.redirect_uri.clone()),
+            code_verifier: None,
+            refresh_token: None,
+        };
+
+        if !oauth.validate_client(&req.client_id, &req.client_secret).await {
             return Ok(Response::new(OAuthTokenResponse {
                 success: false,
                 access_token: "".into(),
@@ -212,58 +212,22 @@ impl AuthService for XAuthCoreService {
             }));
         }
 
-        if let Ok(claims) = crate::jwt::validate_jwt(&req.code, &self.settings.jwt.secret) {
-            if let Ok(data) = serde_json::from_str::<serde_json::Value>(&claims.sub) {
-                let u = data["u"].as_str().unwrap_or_default();
-                let c = data["c"].as_str().unwrap_or_default();
-                let r = data["r"].as_str().unwrap_or_default();
-
-                if c == req.client_id && r == req.redirect_uri {
-                    if let Ok(Some(user)) = repo.get_user_by_name(u).await {
-                        let access_token = crate::jwt::generate_jwt(
-                            u,
-                            &self.settings.jwt.secret,
-                            self.settings.jwt.access_token_ttl,
-                        )
-                        .unwrap_or_default();
-                        let refresh_token = crate::jwt::generate_jwt(
-                            u,
-                            &self.settings.jwt.secret,
-                            self.settings.jwt.refresh_token_ttl,
-                        )
-                        .unwrap_or_default();
-                        let scopes = "openid profile";
-
-                        repo.create_oauth_token(
-                            &req.client_id,
-                            user.id,
-                            &access_token,
-                            Some(&refresh_token),
-                            self.settings.jwt.access_token_ttl as i64,
-                            scopes,
-                        )
-                        .await
-                        .ok();
-
-                        return Ok(Response::new(OAuthTokenResponse {
-                            success: true,
-                            access_token,
-                            refresh_token,
-                            expires_in: self.settings.jwt.access_token_ttl as i32,
-                            error: "".into(),
-                        }));
-                    }
-                }
-            }
+        match oauth.exchange_authorization_code(&token_req).await {
+            Ok(issued) => Ok(Response::new(OAuthTokenResponse {
+                success: true,
+                access_token: issued.access_token,
+                refresh_token: issued.refresh_token,
+                expires_in: issued.expires_in as i32,
+                error: "".into(),
+            })),
+            Err(e) => Ok(Response::new(OAuthTokenResponse {
+                success: false,
+                access_token: "".into(),
+                refresh_token: "".into(),
+                expires_in: 0,
+                error: e.code().into(),
+            })),
         }
-
-        Ok(Response::new(OAuthTokenResponse {
-            success: false,
-            access_token: "".into(),
-            refresh_token: "".into(),
-            expires_in: 0,
-            error: "invalid_grant".into(),
-        }))
     }
 
     async fn revoke_o_auth_token(
@@ -271,16 +235,7 @@ impl AuthService for XAuthCoreService {
         request: Request<OAuthRevokeRequest>,
     ) -> Result<Response<OAuthRevokeResponse>, Status> {
         let req = request.into_inner();
-        let repo = UserRepository::new(self.db.clone());
-
-        repo.delete_oauth_token(&req.token).await.ok();
-
-        if let Ok(claims) = crate::jwt::validate_jwt(&req.token, &self.settings.jwt.secret) {
-            repo.blacklist_token(&claims.jti, claims.exp as i64)
-                .await
-                .ok();
-        }
-
+        self.oauth_service().revoke(&req.token).await;
         Ok(Response::new(OAuthRevokeResponse { success: true }))
     }
 
