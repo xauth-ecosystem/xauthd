@@ -108,6 +108,100 @@ login_chain = ["password", "totp"]
 
 The `xauthd` core natively handles security-critical steps (`password`, `register`, `totp`). Any custom steps, such as `captcha` or `send_gift`, are automatically delegated to your PocketMine plugin. The plugin must execute the step on the client side and return a `{step_name}_complete` gRPC signal to allow the player to proceed.
 
+## Web Server & Templates
+
+`xauthd` ships with a built-in HTTP server (Axum) that handles the OAuth 2.0 / OIDC web flow: login, consent, token exchange, JWKS, and discovery.
+
+### Configuration
+
+```toml
+[network]
+web_address = "0.0.0.0:8080"
+
+[web]
+templates_dir = "./templates"
+public_dir = "./public"
+```
+
+| Key | Description |
+|-----|-------------|
+| `templates_dir` | Path to the directory containing HTML templates (MiniJinja syntax). |
+| `public_dir` | Path to the directory for static assets (CSS, JS, images). Files are served under the `/static/` URL prefix. Leave empty to disable. |
+
+The daemon will **panic on startup** if `templates_dir` does not exist. Create it before running:
+```bash
+mkdir -p templates public
+```
+
+### Customizing Templates
+
+Templates are plain HTML files with [MiniJinja](https://docs.rs/minijinja) placeholders (Jinja2 syntax). The daemon reads them on every request — **no restart required** after edits.
+
+Two templates are required:
+
+| File | Purpose |
+|------|---------|
+| `templates/login.html` | Login form rendered by `GET /authorize` |
+| `templates/consent.html` | OAuth consent page rendered by `GET /consent` |
+
+#### `login.html` Variables
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `{{ client_id }}` | string | The requesting application's ID. |
+| `{{ redirect_uri }}` | string | Callback URL after auth. |
+| `{{ state }}` | string | CSRF / state parameter. |
+| `{{ code_challenge }}` | string | PKCE code challenge. |
+| `{{ code_challenge_method }}` | string | `S256` or `plain`. |
+| `{{ nonce }}` | string | OIDC nonce. |
+| `{{ error }}` | string \| none | Error message from a failed login attempt. |
+
+#### `consent.html` Variables
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `{{ client_id }}` | string | The requesting application's ID. |
+| `{{ redirect_uri }}` | string | Callback URL after consent. |
+| `{{ state }}` | string | CSRF / state parameter. |
+| `{{ username }}` | string | Authenticated player's username. |
+| `{{ scopes_list }}` | string | Space-separated list of requested scopes. |
+| `{{ code_challenge }}` | string | PKCE code challenge. |
+| `{{ code_challenge_method }}` | string | `S256` or `plain`. |
+| `{{ nonce }}` | string | OIDC nonce. |
+
+### Static Assets
+
+Place CSS, JS, images, or fonts in the `public_dir` directory. They are served under `/static/`:
+
+```
+public/
+├── styles.css
+└── logo.png
+```
+
+Reference them in your templates:
+```html
+<link rel="stylesheet" href="/static/styles.css">
+<img src="/static/logo.png" alt="Logo">
+```
+
+If `public_dir` is not set or the directory does not exist, static file serving is silently disabled.
+
+### Web Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/.well-known/openid-configuration` | OIDC discovery document |
+| `GET` | `/jwks` | JSON Web Key Set (RSA public keys) |
+| `GET` | `/authorize` | Renders `login.html` |
+| `POST` | `/login` | Authenticates the player, redirects to consent |
+| `GET` | `/consent` | Renders `consent.html` |
+| `POST` | `/consent` | Approves or denies scope access |
+| `POST` | `/token` | Exchanges authorization code for tokens (PKCE supported) |
+| `GET` | `/user` | Returns user info for a valid `Bearer` token |
+| `POST` | `/introspect` | Checks if a token is active |
+| `POST` | `/revoke` | Revokes an access or refresh token |
+
 ## Client Libraries
 
 To connect your PocketMine-MP (PHP) or Nukkit/Spigot/Paper (Java) plugin to `xauthd`, generate gRPC client stubs from `proto/xauth.proto`. See [docs/code-generation.md](docs/code-generation.md) for setup instructions.
