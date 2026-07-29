@@ -190,7 +190,10 @@ impl AuthService for XAuthCoreService {
                     false
                 };
 
-                if !has_2fa && req.step_type == "init" {
+                if !has_2fa {
+                    success = true;
+                    step_completed = true;
+                } else if req.step_type == "init" {
                     let u = user
                         .as_ref()
                         .ok_or_else(|| Status::internal("User not found"))?;
@@ -258,8 +261,6 @@ impl AuthService for XAuthCoreService {
                     } else {
                         message = "Invalid TOTP code".into();
                     }
-                } else if req.step_type == "init" {
-                    success = true;
                 } else {
                     return Err(Status::invalid_argument("Expected totp step"));
                 }
