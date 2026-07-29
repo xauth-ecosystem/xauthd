@@ -684,6 +684,13 @@ async fn introspect_post(
                 .flatten()
                 .map(|t| t.scopes)
                 .unwrap_or_default();
+            let client_id = repo
+                .get_oauth_token(&req.token)
+                .await
+                .ok()
+                .flatten()
+                .map(|t| t.client_id)
+                .unwrap_or_default();
             return (
                 axum::http::StatusCode::OK,
                 Json(serde_json::json!({
@@ -692,7 +699,8 @@ async fn introspect_post(
                     "username": claims.sub,
                     "exp": claims.exp,
                     "iat": claims.iat,
-                    "scope": scope
+                    "scope": scope,
+                    "client_id": client_id
                 })),
             )
                 .into_response();
