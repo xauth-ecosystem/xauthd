@@ -622,50 +622,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_player_info_not_found() {
-        let db = setup_test_db().await;
-        let settings = get_test_settings();
-        let service = XAuthCoreService::new(db, settings);
-
-        let req = Request::new(PlayerInfoRequest {
-            target_username: "unknown".into(),
-            requestor_id: "admin".into(),
-        });
-
-        let resp = service.get_player_info(req).await.unwrap().into_inner();
-        assert!(!resp.exists);
-        assert_eq!(resp.username, "unknown");
-    }
-
-    #[tokio::test]
-    async fn test_get_player_info_exists() {
-        let db = setup_test_db().await;
-
-        let new_user = crate::db::ActiveModel {
-            username: Set("known_user".into()),
-            password_hash: Set("hash".into()),
-            failed_attempts: Set(0),
-            is_banned: Set(true),
-            must_change_password: Set(false),
-            ..Default::default()
-        };
-        new_user.insert(&db).await.unwrap();
-
-        let settings = get_test_settings();
-        let service = XAuthCoreService::new(db, settings);
-
-        let req = Request::new(PlayerInfoRequest {
-            target_username: "known_user".into(),
-            requestor_id: "admin".into(),
-        });
-
-        let resp = service.get_player_info(req).await.unwrap().into_inner();
-        assert!(resp.exists);
-        assert_eq!(resp.username, "known_user");
-        assert!(resp.is_banned);
-    }
-
-    #[tokio::test]
     async fn test_process_auth_step_init_register() {
         let db = setup_test_db().await;
         let settings = get_test_settings();
@@ -719,5 +675,49 @@ mod tests {
         assert!(resp.success);
         assert_eq!(resp.next_action, "require_password");
         assert!(!resp.flow_token.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_player_info_not_found() {
+        let db = setup_test_db().await;
+        let settings = get_test_settings();
+        let service = XAuthCoreService::new(db, settings);
+
+        let req = Request::new(PlayerInfoRequest {
+            target_username: "unknown".into(),
+            requestor_id: "admin".into(),
+        });
+
+        let resp = service.get_player_info(req).await.unwrap().into_inner();
+        assert!(!resp.exists);
+        assert_eq!(resp.username, "unknown");
+    }
+
+    #[tokio::test]
+    async fn test_get_player_info_exists() {
+        let db = setup_test_db().await;
+
+        let new_user = crate::db::ActiveModel {
+            username: Set("known_user".into()),
+            password_hash: Set("hash".into()),
+            failed_attempts: Set(0),
+            is_banned: Set(true),
+            must_change_password: Set(false),
+            ..Default::default()
+        };
+        new_user.insert(&db).await.unwrap();
+
+        let settings = get_test_settings();
+        let service = XAuthCoreService::new(db, settings);
+
+        let req = Request::new(PlayerInfoRequest {
+            target_username: "known_user".into(),
+            requestor_id: "admin".into(),
+        });
+
+        let resp = service.get_player_info(req).await.unwrap().into_inner();
+        assert!(resp.exists);
+        assert_eq!(resp.username, "known_user");
+        assert!(resp.is_banned);
     }
 }
