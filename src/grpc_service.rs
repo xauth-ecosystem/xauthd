@@ -190,7 +190,7 @@ impl AuthService for XAuthCoreService {
                     false
                 };
 
-                if !has_2fa {
+                if !has_2fa && !self.settings.totp.required {
                     success = true;
                     step_completed = true;
                 } else if req.step_type == "init" {
