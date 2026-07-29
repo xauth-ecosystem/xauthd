@@ -18,6 +18,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260727_000003_create_oauth_clients::Migration),
             Box::new(m20260727_000004_create_sessions_table::Migration),
             Box::new(m20260727_000005_create_oauth_tokens_table::Migration),
+            Box::new(m20260729_000006_add_totp_secret::Migration),
         ]
     }
 }
