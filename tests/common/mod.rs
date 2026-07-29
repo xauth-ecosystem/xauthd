@@ -6,10 +6,8 @@ use xauth_core::config::{
 };
 
 pub async fn setup_test_db() -> DatabaseConnection {
-    let db_uri = format!(
-        "sqlite::memory:?cache=private&uri=file:test_{}",
-        uuid::Uuid::new_v4()
-    );
+    let path = format!("/tmp/xauthd_test_{}.sqlite", uuid::Uuid::new_v4());
+    let db_uri = format!("sqlite://{}?mode=rwc", path);
     let db = Database::connect(&db_uri).await.unwrap();
     let builder = db.get_database_backend();
     let schema = Schema::new(builder);
@@ -32,9 +30,7 @@ pub async fn setup_test_db() -> DatabaseConnection {
 
 pub fn get_test_settings() -> Arc<Settings> {
     Arc::new(Settings {
-        database: DatabaseSettings {
-            url: "".into(),
-        },
+        database: DatabaseSettings { url: "".into() },
         network: NetworkSettings {
             grpc_address: "".into(),
             web_address: "".into(),
