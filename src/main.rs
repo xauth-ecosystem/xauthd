@@ -1,6 +1,7 @@
 use sea_orm::Database;
 use sea_orm_migration::MigratorTrait;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tonic::transport::Server;
 use tracing::info;
 use xauth_core::grpc_service::XAuthCoreService;
@@ -100,11 +101,13 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             Migrator::up(&db, None).await?;
             info!("Migrations applied successfully.");
 
-            let core_service =
-                XAuthCoreService::new(db.clone(), std::sync::Arc::new(settings.clone()));
+            let settings_arc = Arc::new(settings.clone());
+            let core_service = XAuthCoreService::new(db.clone(), settings_arc.clone());
+
+            let grpc_clients = core_service.clients.clone();
+            let pending_scopes = core_service.pending_scope_requests.clone();
 
             let addr: SocketAddr = settings.network.grpc_address.parse()?;
-
             info!("XAuth Core gRPC listening on {}", addr);
 
             let grpc_server = Server::builder()
@@ -112,7 +115,8 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 .serve(addr);
 
             let web_app =
-                xauth_core::web::router(db.clone(), std::sync::Arc::new(settings.clone()));
+                xauth_core::web::router(db.clone(), settings_arc, grpc_clients, pending_scopes);
+
             let web_listener = tokio::net::TcpListener::bind(&settings.network.web_address).await?;
             info!(
                 "XAuth Web Dashboard listening on {}",
