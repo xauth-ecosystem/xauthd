@@ -221,20 +221,160 @@ Reference them in your templates:
 
 If `public_dir` is not set or the directory does not exist, static file serving is silently disabled.
 
-### Web Endpoints
+### API Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/.well-known/openid-configuration` | OIDC discovery document |
-| `GET` | `/jwks` | JSON Web Key Set (RSA public keys) |
-| `GET` | `/authorize` | Renders `login.html` |
-| `POST` | `/login` | Authenticates the player, redirects to consent |
-| `GET` | `/consent` | Renders `consent.html` |
-| `POST` | `/consent` | Approves or denies scope access |
-| `POST` | `/token` | Exchanges authorization code for tokens (PKCE supported) |
-| `GET` | `/user` | Returns user info for a valid `Bearer` token |
-| `POST` | `/introspect` | Checks if a token is active |
-| `POST` | `/revoke` | Revokes an access or refresh token |
+#### `GET /.well-known/openid-configuration`
+
+Returns the OIDC discovery document.
+
+```json
+{
+  "issuer": "http://localhost:8080",
+  "authorization_endpoint": "http://localhost:8080/authorize",
+  "token_endpoint": "http://localhost:8080/token",
+  "jwks_uri": "http://localhost:8080/jwks",
+  "scopes_supported": ["openid", "profile"],
+  "response_types_supported": ["code"],
+  "grant_types_supported": ["authorization_code"],
+  "id_token_signing_alg_values_supported": ["RS256"]
+}
+```
+
+#### `GET /jwks`
+
+Returns the RSA public keys in JWKS format.
+
+#### `GET /authorize`
+
+Renders the `login.html` template.
+
+- **Query Parameters:**
+  - `client_id` (required): The ID of the registered client.
+  - `redirect_uri` (required): The callback URL where the user will be sent after login.
+  - `state` (optional): An opaque CSRF parameter.
+  - `code_challenge` (required): A PKCE code challenge.
+  - `code_challenge_method` (required): `S256` or `plain`.
+  - `nonce` (optional): An OIDC nonce.
+  - `error` (optional): An error message from a previous attempt to display in the template.
+
+#### `POST /login`
+
+Handles the login form submission.
+
+- **Form Parameters:**
+  - `username` (required): The player's username.
+  - `password` (required): The player's password.
+  - `client_id`, `redirect_uri`, `state`, `code_challenge`, `code_challenge_method`, `nonce` — passed through from the authorize step.
+- **On Success:** Returns a JSON response with a `redirect_url` pointing to the consent page.
+  ```json
+  {
+    "redirect_url": "/consent?client_id=...&redirect_uri=...&state=...",
+    "error": null
+  }
+  ```
+- **On Failure:** Returns a JSON response with an `error` message.
+  ```json
+  {
+    "redirect_url": null,
+    "error": "Invalid username or password"
+  }
+  ```
+
+#### `GET /consent`
+
+Renders the `consent.html` template. Reads the authenticated player's username from the session cookie.
+
+- **Query Parameters:**
+  - `client_id`, `redirect_uri`, `state`, `code_challenge`, `code_challenge_method`, `nonce` — passed through from the login step.
+
+#### `POST /consent`
+
+Approves or denies the scope access request.
+
+- **Form Parameters:**
+  - `action` (required): `approve` or `deny`.
+  - `client_id`, `redirect_uri`, `state`, `code_challenge`, `code_challenge_method`, `nonce` — passed through from the previous step.
+- **On Approve:** Redirects the user to `redirect_uri?code=<jwt>&state=...`.
+- **On Deny:** Redirects the user to `redirect_uri?error=access_denied&state=...`.
+
+#### `POST /token`
+
+Exchanges an authorization code for access and refresh tokens. This should be a server-to-server request.
+
+- **Form Parameters:**
+  - `grant_type` (required): `authorization_code`.
+  - `code` (required): The authorization code received from the consent step.
+  - `redirect_uri` (required): The same redirect URI used during consent.
+  - `client_id` (required): The client ID.
+  - `client_secret` (required): The client secret.
+  - `code_verifier` (required if `code_challenge` was provided): The PKCE code verifier.
+- **On Success:** Returns a JSON object with the tokens.
+  ```json
+  {
+    "access_token": "...",
+    "token_type": "Bearer",
+    "expires_in": 3600,
+    "refresh_token": "...",
+    "id_token": "..."
+  }
+  ```
+- **On Failure:**
+  - `invalid_client` (401): Invalid `client_id` or `client_secret`.
+  - `unsupported_grant_type` (400): `grant_type` is not `authorization_code`.
+  - `invalid_grant` (400): Invalid or expired code, or PKCE verification failed.
+
+#### `GET /user`
+
+Returns user information for a valid access token.
+
+- **Headers:**
+  - `Authorization: Bearer <access_token>`
+- **On Success:** Returns a JSON object with the user info.
+  ```json
+  {
+    "sub": "player1",
+    "preferred_username": "player1",
+    "name": "player1"
+  }
+  ```
+- **On Failure:**
+  - `invalid_token` (401): The token is missing, expired, or blacklisted.
+
+#### `POST /introspect`
+
+Checks whether a token is active and returns its metadata.
+
+- **Form Parameters:**
+  - `token` (required): The access or refresh token to introspect.
+  - `client_id` (required): The client ID.
+  - `client_secret` (required): The client secret.
+- **On Success (active):**
+  ```json
+  {
+    "active": true,
+    "sub": "player1",
+    "exp": 1678886400,
+    "iat": 1678882800
+  }
+  ```
+- **On Success (inactive):**
+  ```json
+  { "active": false }
+  ```
+- **On Failure:**
+  - `invalid_client` (401): Invalid `client_id` or `client_secret`.
+
+#### `POST /revoke`
+
+Revokes an access or refresh token.
+
+- **Form Parameters:**
+  - `token` (required): The access or refresh token to revoke.
+  - `client_id` (required): The client ID.
+  - `client_secret` (required): The client secret.
+- **On Success:** Returns an empty 200 OK response.
+- **On Failure:**
+  - `invalid_client` (401): Invalid `client_id` or `client_secret`.
 
 ## Client Libraries
 
