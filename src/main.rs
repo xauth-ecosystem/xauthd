@@ -9,7 +9,7 @@ mod grpc_service;
 mod hash;
 mod jwt;
 mod migrator;
-mod web;
+pub mod web;
 
 pub mod xauth_v1 {
     tonic::include_proto!("xauth.v1");
