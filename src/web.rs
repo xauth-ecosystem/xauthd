@@ -455,7 +455,7 @@ async fn token_post(
                         )
                         .unwrap();
 
-                        let scopes = "openid profile";
+                        let scopes = data["s"].as_str().unwrap_or("");
                         repo.create_oauth_token(
                             &req.client_id,
                             user.id,
