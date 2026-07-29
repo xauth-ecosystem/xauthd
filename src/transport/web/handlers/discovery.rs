@@ -1,5 +1,5 @@
 use axum::{extract::State, response::IntoResponse, Json};
-use super::state::AppState;
+use crate::transport::web::state::AppState;
 
 pub async fn jwks_get(State(state): State<AppState>) -> impl IntoResponse {
     Json(crate::jwt::get_jwks(&state.rsa_key))
