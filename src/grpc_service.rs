@@ -1082,4 +1082,61 @@ mod tests {
         let resp = service.validate_session(req).await.unwrap().into_inner();
         assert!(!resp.is_valid);
     }
+
+    #[tokio::test]
+    async fn test_force_password_change() {
+        let db = setup_test_db().await;
+
+        let new_user = crate::db::ActiveModel {
+            username: Set("force_pw_player".into()),
+            password_hash: Set("hash".into()),
+            failed_attempts: Set(0),
+            is_banned: Set(false),
+            must_change_password: Set(false),
+            ..Default::default()
+        };
+        new_user.insert(&db).await.unwrap();
+
+        let settings = get_test_settings();
+        let service = XAuthCoreService::new(db.clone(), settings.clone());
+
+        let req = Request::new(ForcePasswordChangeRequest {
+            target_username: "force_pw_player".into(),
+            immediate_kick: false,
+        });
+
+        let resp = service
+            .force_password_change(req)
+            .await
+            .unwrap()
+            .into_inner();
+        assert!(resp.success);
+
+        let repo = UserRepository::new(db);
+        let user = repo
+            .get_user_by_name("force_pw_player")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(user.must_change_password);
+    }
+
+    #[tokio::test]
+    async fn test_force_password_change_user_not_found() {
+        let db = setup_test_db().await;
+        let settings = get_test_settings();
+        let service = XAuthCoreService::new(db, settings);
+
+        let req = Request::new(ForcePasswordChangeRequest {
+            target_username: "nonexistent".into(),
+            immediate_kick: false,
+        });
+
+        let resp = service
+            .force_password_change(req)
+            .await
+            .unwrap()
+            .into_inner();
+        assert!(!resp.success);
+    }
 }
