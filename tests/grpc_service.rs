@@ -248,7 +248,13 @@ async fn test_process_auth_step_register_user_exists() {
 #[tokio::test]
 async fn test_process_auth_step_totp_skip() {
     let db = setup_test_db().await;
-    let settings = get_test_settings();
+    let settings = Arc::new(Settings {
+        auth_flow: AuthFlowSettings {
+            login_chain: vec!["password".into(), "totp".into()],
+            ..get_test_settings().auth_flow.clone()
+        },
+        ..get_test_settings().as_ref().clone()
+    });
 
     let repo = UserRepository::new(db.clone());
     repo.create_user("player_no_2fa", "hash").await.unwrap();
