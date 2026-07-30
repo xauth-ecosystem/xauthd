@@ -21,6 +21,7 @@ pub struct XAuthCoreService {
     rsa_key: Arc<rsa::RsaPrivateKey>,
     pub clients: Arc<RwLock<HashMap<String, ClientSender>>>,
     pub pending_scope_requests: PendingScopeMap,
+    pub rate_limiter: crate::services::rate_limit::RateLimiter,
 }
 
 impl XAuthCoreService {
@@ -29,12 +30,15 @@ impl XAuthCoreService {
         settings: Arc<crate::config::Settings>,
         rsa_key: Arc<rsa::RsaPrivateKey>,
     ) -> Self {
+        let rate_limiter =
+            crate::services::rate_limit::RateLimiter::new(settings.rate_limit.clone());
         Self {
             db,
             settings,
             rsa_key,
             clients: Arc::new(RwLock::new(HashMap::new())),
             pending_scope_requests: Arc::new(RwLock::new(HashMap::new())),
+            rate_limiter,
         }
     }
 
