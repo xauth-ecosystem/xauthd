@@ -30,7 +30,7 @@ impl SessionService {
                 .as_secs() as i64;
             if session.expires_at > now {
                 if let Ok(claims) =
-                    crate::jwt::validate_jwt(token, &self.settings.jwt.secret)
+                    crate::services::jwt::validate_jwt(token, &self.settings.jwt.secret)
                 {
                     is_valid = true;
                     username = claims.sub;
