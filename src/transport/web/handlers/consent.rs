@@ -56,7 +56,7 @@ pub async fn consent_post(
             Some(u) => u,
             None => return axum::response::Redirect::to("/login").into_response(),
         };
-        let subject = serde_json::to_string(&serde_json::json!({
+        let subject = match serde_json::to_string(&serde_json::json!({
             "u": username,
             "c": f.client_id,
             "r": f.redirect_uri,
@@ -64,14 +64,30 @@ pub async fn consent_post(
             "cc": f.code_challenge,
             "ccm": f.code_challenge_method,
             "n": f.nonce
-        }))
-        .unwrap_or_default();
-        let code = crate::services::jwt::generate_jwt(
+        })) {
+            Ok(s) => s,
+            Err(_) => {
+                let url = format!(
+                    "{}?error=server_error&error_description=Failed+to+serialize+subject&state={}",
+                    f.redirect_uri, f.state
+                );
+                return axum::response::Redirect::to(&url).into_response();
+            }
+        };
+        let code = match crate::services::jwt::generate_jwt(
             &subject,
             &state.settings.jwt.secret,
             state.settings.jwt.auth_code_ttl,
-        )
-        .unwrap_or_else(|_| "fallback_code".into());
+        ) {
+            Ok(c) => c,
+            Err(_) => {
+                let url = format!(
+                    "{}?error=server_error&error_description=Failed+to+generate+token&state={}",
+                    f.redirect_uri, f.state
+                );
+                return axum::response::Redirect::to(&url).into_response();
+            }
+        };
         let url = format!("{}?code={}&state={}", f.redirect_uri, code, f.state);
         axum::response::Redirect::to(&url).into_response()
     } else {
