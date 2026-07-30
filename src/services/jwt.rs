@@ -33,7 +33,7 @@ pub struct FlowClaims {
 /// # Examples
 ///
 /// ```
-/// use xauth_core::jwt::generate_flow_token;
+/// use xauth_core::services::jwt::generate_flow_token;
 ///
 /// let token = generate_flow_token("alice", "login", 0, "secret", 600).unwrap();
 /// assert!(!token.is_empty());
@@ -72,7 +72,7 @@ pub fn generate_flow_token(
 /// # Examples
 ///
 /// ```
-/// use xauth_core::jwt::{generate_flow_token, validate_flow_token};
+/// use xauth_core::services::jwt::{generate_flow_token, validate_flow_token};
 ///
 /// let token = generate_flow_token("alice", "login", 2, "secret", 600).unwrap();
 /// let claims = validate_flow_token(&token, "secret").unwrap();
@@ -106,7 +106,7 @@ pub fn validate_flow_token(token: &str, secret: &str) -> Result<FlowClaims, Erro
 /// snippet below is checked for compilation only.
 ///
 /// ```no_run
-/// use xauth_core::jwt::get_or_create_rsa_key;
+/// use xauth_core::services::jwt::get_or_create_rsa_key;
 ///
 /// let key = get_or_create_rsa_key("/var/lib/xauthd/rsa_key.pem");
 /// ```
@@ -134,7 +134,7 @@ pub fn get_or_create_rsa_key(path: &str) -> RsaPrivateKey {
 ///
 /// ```
 /// use rsa::RsaPrivateKey;
-/// use xauth_core::jwt::get_jwks;
+/// use xauth_core::services::jwt::get_jwks;
 ///
 /// let mut rng = rand_core::OsRng;
 /// let priv_key = RsaPrivateKey::new(&mut rng, 2048).unwrap();
@@ -172,7 +172,7 @@ pub fn get_jwks(priv_key: &RsaPrivateKey) -> serde_json::Value {
 /// # Examples
 ///
 /// ```
-/// use xauth_core::jwt::generate_jwt;
+/// use xauth_core::services::jwt::generate_jwt;
 ///
 /// let token = generate_jwt("alice", "secret", 3600).unwrap();
 /// assert!(!token.is_empty());
@@ -212,7 +212,7 @@ pub fn generate_jwt(
 ///
 /// ```
 /// use rsa::RsaPrivateKey;
-/// use xauth_core::jwt::generate_rs256_jwt;
+/// use xauth_core::services::jwt::generate_rs256_jwt;
 ///
 /// let mut rng = rand_core::OsRng;
 /// let priv_key = RsaPrivateKey::new(&mut rng, 2048).unwrap();
@@ -264,7 +264,7 @@ pub fn generate_rs256_jwt(
 /// # Examples
 ///
 /// ```
-/// use xauth_core::jwt::{generate_jwt, validate_jwt};
+/// use xauth_core::services::jwt::{generate_jwt, validate_jwt};
 ///
 /// let token = generate_jwt("alice", "secret", 3600).unwrap();
 /// let claims = validate_jwt(&token, "secret").unwrap();
