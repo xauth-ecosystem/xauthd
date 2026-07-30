@@ -1,20 +1,38 @@
 use crate::db::UserRepository;
+use crate::services::rate_limit::RateLimitType;
 use crate::transport::web::{
     dto::{LoginForm, LoginResponse},
     state::AppState,
 };
 use axum::{
-    extract::{Form, State},
-    response::IntoResponse,
+    extract::{ConnectInfo, Form, State},
+    response::{IntoResponse, Redirect},
     Json,
 };
+use std::net::SocketAddr;
 
 pub async fn login_post(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Form(f): Form<LoginForm>,
 ) -> impl IntoResponse {
     let repo = UserRepository::new(state.db.clone());
     let mut headers = axum::http::HeaderMap::new();
+
+    // Check IP rate limit
+    let ip = addr.ip().to_string();
+    if let Err(e) = state.rate_limiter.check(&RateLimitType::Ip(ip)).await {
+        return Redirect::to(&format!("/login?error={}", urlencoding::encode(e))).into_response();
+    }
+
+    // Check Username rate limit
+    if let Err(e) = state
+        .rate_limiter
+        .check(&RateLimitType::Username(f.username.clone()))
+        .await
+    {
+        return Redirect::to(&format!("/login?error={}", urlencoding::encode(e))).into_response();
+    }
 
     match repo.get_user_by_name(&f.username).await {
         Ok(Some(mut user)) => {
