@@ -110,10 +110,16 @@ impl AuthFlowService {
             "password" => self.handle_password(&req, step_index).await,
             "register" => self.handle_register(&req).await,
             "totp" => self.handle_totp(&req, &chain_name, step_index).await,
-            _ => Err(AuthFlowError::Fail(format!(
-                "Expected {}_complete",
-                current_step
-            ))),
+            _ => {
+                if req.step_type == format!("{}_complete", current_step) {
+                    Ok(StepOutcome::Ok)
+                } else {
+                    Err(AuthFlowError::Fail(format!(
+                        "Expected {}_complete",
+                        current_step
+                    )))
+                }
+            },
         }?;
 
         let (success, step_completed) = match &result {
