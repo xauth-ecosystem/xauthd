@@ -79,6 +79,7 @@ pub struct TotpSettings {
 pub struct RateLimitSettings {
     pub enabled: bool,
     pub max_attempts_per_ip: u32,
+    pub max_attempts_per_username: u32,
     pub window_seconds: u64,
 }
 
