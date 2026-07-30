@@ -1,6 +1,6 @@
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use rsa::{traits::PublicKeyParts, RsaPrivateKey, RsaPublicKey};
-use xauth_core::jwt::{
+use xauth_core::services::jwt::{
     generate_flow_token, generate_jwt, generate_rs256_jwt, get_jwks, get_or_create_rsa_key,
     validate_flow_token, validate_jwt, Claims,
 };
