@@ -26,7 +26,7 @@ pub async fn run(admin_cmd: &AdminCommands, db: DatabaseConnection) -> Result<()
     match admin_cmd {
         AdminCommands::ResetPassword { username, new_password } => {
             if let Some(user) = repo.get_user_by_name(username).await? {
-                let hash = crate::hash::hash_password(new_password, &settings.password_hashing).unwrap();
+                let hash = crate::services::hash::hash_password(new_password, &settings.password_hashing).unwrap();
                 repo.update_password(user.id, &hash).await?;
                 tracing::info!("Password reset successfully for user '{}'.", username);
             } else {
