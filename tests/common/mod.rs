@@ -13,14 +13,14 @@ pub async fn setup_test_db() -> DatabaseConnection {
     let db = Database::connect(&db_uri).await.unwrap();
     let builder = db.get_database_backend();
     let schema = Schema::new(builder);
-    use xauth_core::db::Entity as UserEntity;
+    use xauth_core::db::entities::users::Entity as UserEntity;
 
     let stmts = vec![
         schema.create_table_from_entity(UserEntity),
-        schema.create_table_from_entity(xauth_core::db::sessions::Entity),
-        schema.create_table_from_entity(xauth_core::db::token_blacklist::Entity),
-        schema.create_table_from_entity(xauth_core::db::oauth_clients::Entity),
-        schema.create_table_from_entity(xauth_core::db::oauth_tokens::Entity),
+        schema.create_table_from_entity(xauth_core::db::entities::sessions::Entity),
+        schema.create_table_from_entity(xauth_core::db::entities::token_blacklist::Entity),
+        schema.create_table_from_entity(xauth_core::db::entities::oauth_clients::Entity),
+        schema.create_table_from_entity(xauth_core::db::entities::oauth_tokens::Entity),
     ];
 
     for stmt in stmts {
