@@ -14,7 +14,10 @@ pub fn render_template(
     Ok(Html(rendered))
 }
 
-pub fn get_username_from_cookie(headers: &axum::http::HeaderMap, state: &AppState) -> String {
+pub fn get_username_from_cookie(
+    headers: &axum::http::HeaderMap,
+    state: &AppState,
+) -> Option<String> {
     if let Some(cookie_val) = headers.get(axum::http::header::COOKIE) {
         if let Ok(cookie_str) = cookie_val.to_str() {
             for part in cookie_str.split(';') {
@@ -23,11 +26,11 @@ pub fn get_username_from_cookie(headers: &axum::http::HeaderMap, state: &AppStat
                     if let Ok(claims) =
                         crate::services::jwt::validate_jwt(token, &state.settings.jwt.secret)
                     {
-                        return claims.sub;
+                        return Some(claims.sub);
                     }
                 }
             }
         }
     }
-    "Guest".to_string()
+    None
 }
