@@ -18,7 +18,7 @@ pub async fn user_get(
     if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
         if let Ok(auth_str) = auth_header.to_str() {
             if let Some(token) = auth_str.strip_prefix("Bearer ") {
-                if let Ok(claims) = crate::jwt::validate_jwt(token, &state.settings.jwt.secret) {
+                if let Ok(claims) = crate::services::jwt::validate_jwt(token, &state.settings.jwt.secret) {
                     if !repo
                         .is_token_blacklisted(&claims.jti)
                         .await
