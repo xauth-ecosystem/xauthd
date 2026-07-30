@@ -83,5 +83,7 @@ max_attempts_per_step = 3
 enabled = true
 # Maximum number of authentication attempts allowed per IP address within the time window.
 max_attempts_per_ip = 10
-# Time window in seconds for the IP rate limit. Default: 60 (1 minute).
+# Maximum number of authentication attempts allowed per username within the time window.
+max_attempts_per_username = 5
+# Time window in seconds for the rate limit. Default: 60 (1 minute).
 window_seconds = 60
