@@ -4,7 +4,7 @@ use axum::{
     Json,
 };
 use crate::db::UserRepository;
-use crate::grpc_service::ClientSender;
+use crate::transport::grpc::ClientSender;
 use crate::xauth_v1::{core_command::CommandType, CoreCommand};
 use tokio::sync::oneshot;
 use crate::transport::web::state::AppState;
