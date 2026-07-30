@@ -20,13 +20,13 @@ pub enum AdminCommands {
 }
 
 pub async fn run(admin_cmd: &AdminCommands, db: DatabaseConnection) -> Result<(), Box<dyn std::error::Error>> {
-    let settings = xauth_core::config::Settings::new()?;
-    let repo = xauth_core::db::UserRepository::new(db);
+    let settings = crate::config::Settings::new()?;
+    let repo = crate::db::UserRepository::new(db);
 
     match admin_cmd {
         AdminCommands::ResetPassword { username, new_password } => {
             if let Some(user) = repo.get_user_by_name(username).await? {
-                let hash = xauth_core::hash::hash_password(new_password, &settings.password_hashing).unwrap();
+                let hash = crate::hash::hash_password(new_password, &settings.password_hashing).unwrap();
                 repo.update_password(user.id, &hash).await?;
                 tracing::info!("Password reset successfully for user '{}'.", username);
             } else {
