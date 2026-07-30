@@ -41,6 +41,7 @@ pub fn router(
     }
 
     let rsa_key = crate::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path);
+    let rate_limiter = crate::services::rate_limit::RateLimiter::new(settings.rate_limit.clone());
     let state = Arc::new(AppStateInner {
         db,
         templates_dir: settings.web.templates_dir.clone(),
@@ -48,6 +49,7 @@ pub fn router(
         rsa_key,
         grpc_clients,
         pending_scope_requests,
+        rate_limiter,
     });
 
     let app = Router::new()
