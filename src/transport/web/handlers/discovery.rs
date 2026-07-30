@@ -2,7 +2,7 @@ use axum::{extract::State, response::IntoResponse, Json};
 use crate::transport::web::state::AppState;
 
 pub async fn jwks_get(State(state): State<AppState>) -> impl IntoResponse {
-    Json(crate::jwt::get_jwks(&state.rsa_key))
+    Json(crate::services::jwt::get_jwks(&state.rsa_key))
 }
 
 pub async fn discovery_get() -> impl IntoResponse {
