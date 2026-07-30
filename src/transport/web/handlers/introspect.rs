@@ -23,7 +23,7 @@ pub async fn introspect_post(
             .into_response();
     }
 
-    if let Ok(claims) = crate::jwt::validate_jwt(&req.token, &state.settings.jwt.secret) {
+    if let Ok(claims) = crate::services::jwt::validate_jwt(&req.token, &state.settings.jwt.secret) {
         if !repo
             .is_token_blacklisted(&claims.jti)
             .await
