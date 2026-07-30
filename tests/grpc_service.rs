@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tonic::Request;
 use xauth_core::config::{AuthFlowSettings, Settings};
 use xauth_core::db::UserRepository;
-use xauth_core::grpc_service::XAuthCoreService;
+use xauth_core::transport::grpc::XAuthCoreService;
 use xauth_core::xauth_v1::auth_service_server::AuthService;
 use xauth_core::xauth_v1::{
     AuthStepRequest, EndSessionRequest, ForcePasswordChangeRequest, OAuthRevokeRequest,
@@ -17,7 +17,7 @@ use xauth_core::xauth_v1::{
 async fn test_process_auth_step_init_register() {
     let db = setup_test_db().await;
     let settings = get_test_settings();
-    let service = XAuthCoreService::new(db, settings);
+    let service = XAuthCoreService::new(db, settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
     let req = Request::new(AuthStepRequest {
         username: "new_player".into(),
@@ -44,7 +44,7 @@ async fn test_process_auth_step_init_login() {
     repo.create_user("existing_player", "hash").await.unwrap();
 
     let settings = get_test_settings();
-    let service = XAuthCoreService::new(db, settings);
+    let service = XAuthCoreService::new(db, settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
     let req = Request::new(AuthStepRequest {
         username: "existing_player".into(),
@@ -67,15 +67,15 @@ async fn test_process_auth_step_password_correct() {
     let db = setup_test_db().await;
     let settings = get_test_settings();
     let password_hash =
-        xauth_core::hash::hash_password("correct_password", &settings.password_hashing).unwrap();
+        xauth_core::services::hash::hash_password("correct_password", &settings.password_hashing).unwrap();
 
     let repo = UserRepository::new(db.clone());
     repo.create_user("player1", &password_hash).await.unwrap();
 
-    let service = XAuthCoreService::new(db, settings.clone());
+    let service = XAuthCoreService::new(db, settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
     let flow_token =
-        xauth_core::jwt::generate_flow_token("player1", "login", 0, &settings.jwt.secret, 600)
+        xauth_core::services::jwt::generate_flow_token("player1", "login", 0, &settings.jwt.secret, 600)
             .unwrap();
 
     let req = Request::new(AuthStepRequest {
@@ -100,15 +100,15 @@ async fn test_process_auth_step_password_incorrect() {
     let db = setup_test_db().await;
     let settings = get_test_settings();
     let password_hash =
-        xauth_core::hash::hash_password("correct_password", &settings.password_hashing).unwrap();
+        xauth_core::services::hash::hash_password("correct_password", &settings.password_hashing).unwrap();
 
     let repo = UserRepository::new(db.clone());
     repo.create_user("player2", &password_hash).await.unwrap();
 
-    let service = XAuthCoreService::new(db, settings.clone());
+    let service = XAuthCoreService::new(db, settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
     let flow_token =
-        xauth_core::jwt::generate_flow_token("player2", "login", 0, &settings.jwt.secret, 600)
+        xauth_core::services::jwt::generate_flow_token("player2", "login", 0, &settings.jwt.secret, 600)
             .unwrap();
 
     let req = Request::new(AuthStepRequest {
@@ -131,9 +131,9 @@ async fn test_process_auth_step_password_locked_account() {
     let db = setup_test_db().await;
     let settings = get_test_settings();
     let password_hash =
-        xauth_core::hash::hash_password("correct_password", &settings.password_hashing).unwrap();
+        xauth_core::services::hash::hash_password("correct_password", &settings.password_hashing).unwrap();
 
-    let new_user = xauth_core::db::ActiveModel {
+    let new_user = xauth_core::db::entities::users::ActiveModel {
         username: Set("locked_player".into()),
         password_hash: Set(password_hash),
         failed_attempts: Set(5),
@@ -143,9 +143,9 @@ async fn test_process_auth_step_password_locked_account() {
     };
     new_user.insert(&db).await.unwrap();
 
-    let service = XAuthCoreService::new(db, settings.clone());
+    let service = XAuthCoreService::new(db, settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
-    let flow_token = xauth_core::jwt::generate_flow_token(
+    let flow_token = xauth_core::services::jwt::generate_flow_token(
         "locked_player",
         "login",
         0,
@@ -178,9 +178,9 @@ async fn test_process_auth_step_register_success() {
         },
         ..get_test_settings().as_ref().clone()
     });
-    let service = XAuthCoreService::new(db, settings.clone());
+    let service = XAuthCoreService::new(db, settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
-    let flow_token = xauth_core::jwt::generate_flow_token(
+    let flow_token = xauth_core::services::jwt::generate_flow_token(
         "new_player",
         "register",
         0,
@@ -220,9 +220,9 @@ async fn test_process_auth_step_register_user_exists() {
         },
         ..get_test_settings().as_ref().clone()
     });
-    let service = XAuthCoreService::new(db, settings.clone());
+    let service = XAuthCoreService::new(db, settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
-    let flow_token = xauth_core::jwt::generate_flow_token(
+    let flow_token = xauth_core::services::jwt::generate_flow_token(
         "existing_player",
         "register",
         0,
@@ -259,9 +259,9 @@ async fn test_process_auth_step_totp_skip() {
     let repo = UserRepository::new(db.clone());
     repo.create_user("player_no_2fa", "hash").await.unwrap();
 
-    let service = XAuthCoreService::new(db, settings.clone());
+    let service = XAuthCoreService::new(db, settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
-    let flow_token = xauth_core::jwt::generate_flow_token(
+    let flow_token = xauth_core::services::jwt::generate_flow_token(
         "player_no_2fa",
         "login",
         1,
@@ -297,10 +297,10 @@ async fn test_process_auth_step_custom_step() {
         },
         ..get_test_settings().as_ref().clone()
     });
-    let service = XAuthCoreService::new(db, settings.clone());
+    let service = XAuthCoreService::new(db, settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
     let flow_token =
-        xauth_core::jwt::generate_flow_token("player1", "login", 0, &settings.jwt.secret, 600)
+        xauth_core::services::jwt::generate_flow_token("player1", "login", 0, &settings.jwt.secret, 600)
             .unwrap();
 
     let req = Request::new(AuthStepRequest {
@@ -330,7 +330,7 @@ async fn test_validate_session() {
         .unwrap()
         .unwrap();
 
-    let token = xauth_core::jwt::generate_jwt(
+    let token = xauth_core::services::jwt::generate_jwt(
         "session_user",
         &settings.jwt.secret,
         settings.jwt.session_ttl,
@@ -346,7 +346,7 @@ async fn test_validate_session() {
     .await
     .unwrap();
 
-    let service = XAuthCoreService::new(db, settings);
+    let service = XAuthCoreService::new(db, settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
     let req = Request::new(SessionRequest {
         session_token: token,
@@ -372,7 +372,7 @@ async fn test_end_session() {
         .unwrap()
         .unwrap();
 
-    let token = xauth_core::jwt::generate_jwt(
+    let token = xauth_core::services::jwt::generate_jwt(
         "session_user2",
         &settings.jwt.secret,
         settings.jwt.session_ttl,
@@ -388,7 +388,7 @@ async fn test_end_session() {
     .await
     .unwrap();
 
-    let service = XAuthCoreService::new(db, settings);
+    let service = XAuthCoreService::new(db, settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
     let req = Request::new(EndSessionRequest {
         username: "session_user2".into(),
@@ -426,10 +426,10 @@ async fn test_generate_o_auth_token() {
     .unwrap();
 
     let code =
-        xauth_core::jwt::generate_jwt(&sub, &settings.jwt.secret, settings.jwt.auth_code_ttl)
+        xauth_core::services::jwt::generate_jwt(&sub, &settings.jwt.secret, settings.jwt.auth_code_ttl)
             .unwrap();
 
-    let service = XAuthCoreService::new(db, settings.clone());
+    let service = XAuthCoreService::new(db, settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
     let req = Request::new(OAuthTokenRequest {
         client_id: "my_client".into(),
@@ -453,7 +453,7 @@ async fn test_generate_o_auth_token() {
 async fn test_generate_o_auth_token_invalid_client() {
     let db = setup_test_db().await;
     let settings = get_test_settings();
-    let service = XAuthCoreService::new(db, settings);
+    let service = XAuthCoreService::new(db, settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
     let req = Request::new(OAuthTokenRequest {
         client_id: "bad_client".into(),
@@ -481,7 +481,7 @@ async fn test_generate_o_auth_token_invalid_code() {
         .await
         .unwrap();
 
-    let service = XAuthCoreService::new(db, settings);
+    let service = XAuthCoreService::new(db, settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
     let req = Request::new(OAuthTokenRequest {
         client_id: "my_client2".into(),
@@ -510,7 +510,7 @@ async fn test_revoke_o_auth_token() {
         .unwrap();
     repo.create_user("oauth_user", "hash").await.unwrap();
 
-    let token = xauth_core::jwt::generate_jwt(
+    let token = xauth_core::services::jwt::generate_jwt(
         "oauth_user",
         &settings.jwt.secret,
         settings.jwt.access_token_ttl,
@@ -532,7 +532,7 @@ async fn test_revoke_o_auth_token() {
     .await
     .unwrap();
 
-    let service = XAuthCoreService::new(db.clone(), settings.clone());
+    let service = XAuthCoreService::new(db.clone(), settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
     let req = Request::new(OAuthRevokeRequest {
         token: token.clone(),
@@ -542,7 +542,7 @@ async fn test_revoke_o_auth_token() {
     let resp = service.revoke_o_auth_token(req).await.unwrap().into_inner();
     assert!(resp.success);
 
-    let claims = xauth_core::jwt::validate_jwt(&token, &settings.jwt.secret).unwrap();
+    let claims = xauth_core::services::jwt::validate_jwt(&token, &settings.jwt.secret).unwrap();
     assert!(
         repo.is_token_blacklisted(&claims.jti).await.unwrap(),
         "Token should be blacklisted after revocation"
@@ -553,7 +553,7 @@ async fn test_revoke_o_auth_token() {
 async fn test_get_player_info_not_found() {
     let db = setup_test_db().await;
     let settings = get_test_settings();
-    let service = XAuthCoreService::new(db, settings);
+    let service = XAuthCoreService::new(db, settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
     let req = Request::new(PlayerInfoRequest {
         target_username: "unknown".into(),
@@ -575,7 +575,7 @@ async fn test_get_player_info_exists() {
     repo.set_banned(user.id, true).await.unwrap();
 
     let settings = get_test_settings();
-    let service = XAuthCoreService::new(db, settings);
+    let service = XAuthCoreService::new(db, settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
     let req = Request::new(PlayerInfoRequest {
         target_username: "known_user".into(),
@@ -596,7 +596,7 @@ async fn test_force_password_change() {
     repo.create_user("force_pw_player", "hash").await.unwrap();
 
     let settings = get_test_settings();
-    let service = XAuthCoreService::new(db.clone(), settings.clone());
+    let service = XAuthCoreService::new(db.clone(), settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
     let req = Request::new(ForcePasswordChangeRequest {
         target_username: "force_pw_player".into(),
@@ -622,7 +622,7 @@ async fn test_force_password_change() {
 async fn test_force_password_change_user_not_found() {
     let db = setup_test_db().await;
     let settings = get_test_settings();
-    let service = XAuthCoreService::new(db, settings);
+    let service = XAuthCoreService::new(db, settings.clone(), std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path)));
 
     let req = Request::new(ForcePasswordChangeRequest {
         target_username: "nonexistent".into(),
