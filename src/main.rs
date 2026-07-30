@@ -87,7 +87,10 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 settings.network.web_address
             );
 
-            let web_server = axum::serve(web_listener, web_app);
+            let web_server = axum::serve(
+                web_listener,
+                web_app.into_make_service_with_connect_info::<SocketAddr>(),
+            );
 
             let (grpc_res, web_res) = tokio::join!(grpc_server, web_server);
             grpc_res?;
