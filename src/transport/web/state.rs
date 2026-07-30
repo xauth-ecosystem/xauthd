@@ -11,6 +11,7 @@ pub struct AppStateInner {
     pub templates_dir: String,
     pub grpc_clients: Arc<RwLock<HashMap<String, ClientSender>>>,
     pub pending_scope_requests: PendingScopeMap,
+    pub rate_limiter: crate::services::rate_limit::RateLimiter,
 }
 
 pub type AppState = Arc<AppStateInner>;
