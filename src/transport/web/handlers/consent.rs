@@ -14,7 +14,10 @@ pub async fn consent_get(
     State(state): State<AppState>,
     Query(q): Query<LoginQuery>,
 ) -> impl IntoResponse {
-    let username = get_username_from_cookie(&headers, &state);
+    let username = match get_username_from_cookie(&headers, &state) {
+        Some(u) => u,
+        None => return axum::response::Redirect::to("/login").into_response(),
+    };
     let repo = UserRepository::new(state.db.clone());
     let mut allowed_scopes = "profile".to_string();
 
@@ -49,7 +52,10 @@ pub async fn consent_post(
     Form(f): Form<ConsentForm>,
 ) -> impl IntoResponse {
     if f.action == "approve" {
-        let username = get_username_from_cookie(&headers, &state);
+        let username = match get_username_from_cookie(&headers, &state) {
+            Some(u) => u,
+            None => return axum::response::Redirect::to("/login").into_response(),
+        };
         let subject = serde_json::to_string(&serde_json::json!({
             "u": username,
             "c": f.client_id,
