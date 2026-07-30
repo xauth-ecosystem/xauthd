@@ -1,7 +1,7 @@
 use xauth_core::config::{
     Argon2idSettings, BcryptSettings, PasswordHashingOptions, PasswordHashingSettings,
 };
-use xauth_core::hash::{hash_password, verify_password};
+use xauth_core::services::hash::{hash_password, verify_password};
 
 fn get_bcrypt_settings() -> PasswordHashingSettings {
     PasswordHashingSettings {
