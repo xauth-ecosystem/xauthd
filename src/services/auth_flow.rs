@@ -164,7 +164,7 @@ impl AuthFlowService {
                     &self.settings.jwt.secret,
                     self.settings.jwt.session_ttl,
                 )
-                .unwrap_or_default();
+                .map_err(|_| AuthFlowError::Internal("Failed to generate session token".into()))?;
                 self.repo
                     .create_session(
                         u.id,
@@ -206,7 +206,7 @@ impl AuthFlowService {
             &self.settings.jwt.secret,
             600,
         )
-        .unwrap_or_default();
+        .map_err(|_| AuthFlowError::Internal("Failed to generate flow token".into()))?;
 
         Ok(AuthStepResult {
             success,
