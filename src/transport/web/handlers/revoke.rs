@@ -24,7 +24,7 @@ pub async fn revoke_post(
 
     repo.delete_oauth_token(&req.token).await.ok();
 
-    if let Ok(claims) = crate::jwt::validate_jwt(&req.token, &state.settings.jwt.secret) {
+    if let Ok(claims) = crate::services::jwt::validate_jwt(&req.token, &state.settings.jwt.secret) {
         repo.blacklist_token(&claims.jti, claims.exp as i64)
             .await
             .ok();
