@@ -76,6 +76,13 @@ pub struct TotpSettings {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct RateLimitSettings {
+    pub enabled: bool,
+    pub max_attempts_per_ip: u32,
+    pub window_seconds: u64,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct Settings {
     pub database: DatabaseSettings,
     pub network: NetworkSettings,
@@ -85,6 +92,7 @@ pub struct Settings {
     pub auth_flow: AuthFlowSettings,
     pub totp: TotpSettings,
     pub web: WebSettings,
+    pub rate_limit: RateLimitSettings,
 }
 
 impl Settings {
