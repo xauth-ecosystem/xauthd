@@ -72,6 +72,26 @@ impl AuthService for XAuthCoreService {
         request: Request<AuthStepRequest>,
     ) -> Result<Response<AuthStepResponse>, Status> {
         let req = request.into_inner();
+
+        let ip = req.ip_address.clone();
+        if let Err(e) = self
+            .rate_limiter
+            .check(&crate::services::rate_limit::RateLimitType::Ip(ip))
+            .await
+        {
+            return Err(Status::resource_exhausted(e));
+        }
+
+        if let Err(e) = self
+            .rate_limiter
+            .check(&crate::services::rate_limit::RateLimitType::Username(
+                req.username.clone(),
+            ))
+            .await
+        {
+            return Err(Status::resource_exhausted(e));
+        }
+
         let auth_flow = crate::services::auth_flow::AuthFlowService::new(
             UserRepository::new(self.db.clone()),
             self.settings.clone(),
