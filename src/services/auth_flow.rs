@@ -63,7 +63,7 @@ impl AuthFlowService {
                 return Err(AuthFlowError::Unauthenticated("Missing flow_token".into()));
             }
             let claims =
-                crate::jwt::validate_flow_token(&req.flow_token, &self.settings.jwt.secret)
+                crate::services::jwt::validate_flow_token(&req.flow_token, &self.settings.jwt.secret)
                     .map_err(|_| AuthFlowError::Unauthenticated("Invalid or expired flow_token".into()))?;
             if claims.sub != req.username {
                 return Err(AuthFlowError::Unauthenticated("Token username mismatch".into()));
@@ -85,7 +85,7 @@ impl AuthFlowService {
         let current_step = &chain[step_index];
 
         if req.step_type == "init" && current_step.as_str() != "totp" {
-            let new_flow_token = crate::jwt::generate_flow_token(
+            let new_flow_token = crate::services::jwt::generate_flow_token(
                 &req.username,
                 &chain_name,
                 step_index,
@@ -138,7 +138,7 @@ impl AuthFlowService {
         if step_index >= chain.len() {
             let user = self.repo.get_user_by_name(&req.username).await.unwrap_or(None);
             if let Some(u) = user {
-                let token = crate::jwt::generate_jwt(
+                let token = crate::services::jwt::generate_jwt(
                     &u.username,
                     &self.settings.jwt.secret,
                     self.settings.jwt.session_ttl,
@@ -173,7 +173,7 @@ impl AuthFlowService {
         };
 
         let next_step = &chain[step_index];
-        let new_flow_token = crate::jwt::generate_flow_token(
+        let new_flow_token = crate::services::jwt::generate_flow_token(
             &req.username,
             &chain_name,
             step_index,
@@ -220,7 +220,7 @@ impl AuthFlowService {
             ));
         }
 
-        if crate::hash::verify_password(&req.input_data, &user.password_hash) {
+        if crate::services::hash::verify_password(&req.input_data, &user.password_hash) {
             self.repo.reset_failed_attempts(user.id).await.ok();
             Ok(StepOutcome::Ok)
         } else {
@@ -230,7 +230,7 @@ impl AuthFlowService {
     }
 
     async fn handle_register(&self, req: &AuthStepInput) -> Result<StepOutcome, AuthFlowError> {
-        let hash = crate::hash::hash_password(&req.input_data, &self.settings.password_hashing)
+        let hash = crate::services::hash::hash_password(&req.input_data, &self.settings.password_hashing)
             .map_err(|_| AuthFlowError::Internal("Hash failed".into()))?;
         if self.repo.create_user(&req.username, &hash).await.is_ok() {
             Ok(StepOutcome::Ok)
@@ -278,7 +278,7 @@ impl AuthFlowService {
                 totp.get_secret_base32(),
                 "xauthd"
             );
-            let new_flow_token = crate::jwt::generate_flow_token(
+            let new_flow_token = crate::services::jwt::generate_flow_token(
                 &req.username,
                 chain_name,
                 step_index,
