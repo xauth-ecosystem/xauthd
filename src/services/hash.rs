@@ -15,7 +15,7 @@ use bcrypt::{hash as bcrypt_hash, verify as bcrypt_verify, DEFAULT_COST};
 ///
 /// ```
 /// use xauth_core::config::PasswordHashingSettings;
-/// use xauth_core::hash::hash_password;
+/// use xauth_core::services::hash::hash_password;
 ///
 /// let settings = PasswordHashingSettings {
 ///     algorithm: "BCRYPT".to_string(),
@@ -69,7 +69,7 @@ pub fn hash_password(password: &str, config: &PasswordHashingSettings) -> Result
 ///
 /// ```
 /// use xauth_core::config::PasswordHashingSettings;
-/// use xauth_core::hash::{hash_password, verify_password};
+/// use xauth_core::services::hash::{hash_password, verify_password};
 ///
 /// let settings = PasswordHashingSettings {
 ///     algorithm: "BCRYPT".to_string(),
