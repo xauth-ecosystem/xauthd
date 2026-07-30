@@ -21,7 +21,7 @@ pub fn get_username_from_cookie(headers: &axum::http::HeaderMap, state: &AppStat
                 let part = part.trim();
                 if let Some(token) = part.strip_prefix("session_token=") {
                     if let Ok(claims) =
-                        crate::jwt::validate_jwt(token, &state.settings.jwt.secret)
+                        crate::services::jwt::validate_jwt(token, &state.settings.jwt.secret)
                     {
                         return claims.sub;
                     }
