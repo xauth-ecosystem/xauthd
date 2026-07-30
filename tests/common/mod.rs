@@ -67,5 +67,10 @@ pub fn get_test_settings() -> Arc<Settings> {
             public_dir: None,
         },
         totp: TotpSettings { required: false },
+        rate_limit: xauth_core::config::RateLimitSettings {
+            enabled: true,
+            max_attempts_per_ip: 10,
+            window_seconds: 60,
+        },
     })
 }
