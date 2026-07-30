@@ -70,6 +70,7 @@ pub fn get_test_settings() -> Arc<Settings> {
         rate_limit: xauth_core::config::RateLimitSettings {
             enabled: true,
             max_attempts_per_ip: 10,
+            max_attempts_per_username: 5,
             window_seconds: 60,
         },
     })
