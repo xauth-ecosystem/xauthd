@@ -3,7 +3,7 @@ pub mod handlers;
 pub mod state;
 pub mod templates;
 
-use crate::grpc_service::{ClientSender, PendingScopeMap};
+use crate::transport::grpc::{ClientSender, PendingScopeMap};
 use axum::{
     routing::{get, post},
     Router,
