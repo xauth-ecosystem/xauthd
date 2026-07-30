@@ -37,9 +37,9 @@ pub async fn login_post(
                     .into_response();
             }
 
-            if crate::hash::verify_password(&f.password, &user.password_hash) {
+            if crate::services::hash::verify_password(&f.password, &user.password_hash) {
                 repo.reset_failed_attempts(user.id).await.ok();
-                if let Ok(session_token) = crate::jwt::generate_jwt(
+                if let Ok(session_token) = crate::services::jwt::generate_jwt(
                     &user.username,
                     &state.settings.jwt.secret,
                     state.settings.jwt.session_ttl,
