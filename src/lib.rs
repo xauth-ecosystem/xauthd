@@ -1,7 +1,6 @@
 pub mod cli;
 pub mod config;
 pub mod db;
-pub mod grpc_service;
 pub mod hash;
 pub mod jwt;
 pub mod migrator;
