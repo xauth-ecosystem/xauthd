@@ -93,9 +93,15 @@ impl OAuthService {
         let data: serde_json::Value = serde_json::from_str(&claims.sub)
             .map_err(|_| TokenError::InvalidGrant("Malformed code payload".into()))?;
 
-        let u = data["u"].as_str().unwrap_or_default();
-        let c = data["c"].as_str().unwrap_or_default();
-        let r = data["r"].as_str().unwrap_or_default();
+        let u = data["u"]
+            .as_str()
+            .ok_or_else(|| TokenError::InvalidGrant("Missing username in code".into()))?;
+        let c = data["c"]
+            .as_str()
+            .ok_or_else(|| TokenError::InvalidGrant("Missing client_id in code".into()))?;
+        let r = data["r"]
+            .as_str()
+            .ok_or_else(|| TokenError::InvalidGrant("Missing redirect_uri in code".into()))?;
         let s = data["s"].as_str().unwrap_or("").to_string();
         let cc = data["cc"].as_str().unwrap_or_default();
         let ccm = data["ccm"].as_str().unwrap_or_default();
