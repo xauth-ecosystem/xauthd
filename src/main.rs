@@ -7,7 +7,7 @@ use tonic::transport::Server;
 use tracing::info;
 use xauth_core::cli::{Cli, Commands};
 use xauth_core::cli::admin::AdminCommands;
-use xauth_core::grpc_service::XAuthCoreService;
+use xauth_core::transport::grpc::XAuthCoreService;
 use xauth_core::migrator::Migrator;
 use xauth_core::xauth_v1::auth_service_server::AuthServiceServer;
 
