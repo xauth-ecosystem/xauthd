@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower::util::ServiceExt;
 use xauth_core::db::UserRepository;
-use xauth_core::web::router;
+use xauth_core::transport::web::router;
 
 fn build_auth_code(
     settings: &xauth_core::config::Settings,
@@ -32,7 +32,7 @@ fn build_auth_code(
         "n": nonce
     }))
     .unwrap();
-    xauth_core::jwt::generate_jwt(&subject, &settings.jwt.secret, settings.jwt.auth_code_ttl)
+    xauth_core::services::jwt::generate_jwt(&subject, &settings.jwt.secret, settings.jwt.auth_code_ttl)
         .unwrap()
 }
 
@@ -202,13 +202,13 @@ async fn test_token_post_refresh_token_success() {
         .await
         .unwrap();
 
-    let refresh_token = xauth_core::jwt::generate_jwt(
+    let refresh_token = xauth_core::services::jwt::generate_jwt(
         "test_user",
         &settings.jwt.secret,
         settings.jwt.refresh_token_ttl,
     )
     .unwrap();
-    let access_token = xauth_core::jwt::generate_jwt(
+    let access_token = xauth_core::services::jwt::generate_jwt(
         "test_user",
         &settings.jwt.secret,
         settings.jwt.access_token_ttl,
@@ -330,7 +330,7 @@ async fn test_introspect_post_active() {
         .await
         .unwrap();
 
-    let token = xauth_core::jwt::generate_jwt(
+    let token = xauth_core::services::jwt::generate_jwt(
         "test_user",
         &settings.jwt.secret,
         settings.jwt.access_token_ttl,
@@ -428,7 +428,7 @@ async fn test_revoke_post_success() {
         .unwrap();
     let user = repo.get_user_by_name("test_user").await.unwrap().unwrap();
 
-    let token = xauth_core::jwt::generate_jwt(
+    let token = xauth_core::services::jwt::generate_jwt(
         "test_user",
         &settings.jwt.secret,
         settings.jwt.access_token_ttl,
@@ -460,7 +460,7 @@ async fn test_revoke_post_success() {
     assert_eq!(resp.status(), StatusCode::OK);
 
     let repo2 = UserRepository::new(db);
-    let claims = xauth_core::jwt::validate_jwt(&token, &settings.jwt.secret).unwrap();
+    let claims = xauth_core::services::jwt::validate_jwt(&token, &settings.jwt.secret).unwrap();
     assert!(repo2.is_token_blacklisted(&claims.jti).await.unwrap());
 }
 
@@ -489,7 +489,7 @@ async fn test_revoke_post_invalid_client() {
 async fn test_user_get_success() {
     let db = setup_test_db().await;
     let settings = get_test_settings();
-    let token = xauth_core::jwt::generate_jwt(
+    let token = xauth_core::services::jwt::generate_jwt(
         "test_user",
         &settings.jwt.secret,
         settings.jwt.access_token_ttl,
