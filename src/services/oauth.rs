@@ -96,7 +96,7 @@ impl OAuthService {
             .code
             .as_ref()
             .ok_or_else(|| TokenError::InvalidRequest("Missing code".into()))?;
-        let claims = crate::jwt::validate_jwt(code, &self.settings.jwt.secret)
+        let claims = crate::services::jwt::validate_jwt(code, &self.settings.jwt.secret)
             .map_err(|_| TokenError::InvalidGrant("Invalid code".into()))?;
         let data: serde_json::Value = serde_json::from_str(&claims.sub)
             .map_err(|_| TokenError::InvalidGrant("Malformed code payload".into()))?;
@@ -156,7 +156,7 @@ impl OAuthService {
             .refresh_token
             .as_ref()
             .ok_or_else(|| TokenError::InvalidRequest("Missing refresh_token".into()))?;
-        let claims = crate::jwt::validate_jwt(refresh, &self.settings.jwt.secret)
+        let claims = crate::services::jwt::validate_jwt(refresh, &self.settings.jwt.secret)
             .map_err(|_| TokenError::InvalidGrant("Invalid or expired refresh token".into()))?;
 
         if self
@@ -213,7 +213,7 @@ impl OAuthService {
 
     pub async fn revoke(&self, token: &str) {
         self.repo.delete_oauth_token(token).await.ok();
-        if let Ok(claims) = crate::jwt::validate_jwt(token, &self.settings.jwt.secret) {
+        if let Ok(claims) = crate::services::jwt::validate_jwt(token, &self.settings.jwt.secret) {
             self.repo
                 .blacklist_token(&claims.jti, claims.exp as i64)
                 .await
@@ -227,13 +227,13 @@ impl OAuthService {
         scopes: &str,
         nonce: &str,
     ) -> Result<IssuedToken, TokenError> {
-        let access_token = crate::jwt::generate_jwt(
+        let access_token = crate::services::jwt::generate_jwt(
             username,
             &self.settings.jwt.secret,
             self.settings.jwt.access_token_ttl,
         )
         .map_err(|_| TokenError::InvalidGrant("JWT generation failed".into()))?;
-        let refresh_token = crate::jwt::generate_jwt(
+        let refresh_token = crate::services::jwt::generate_jwt(
             username,
             &self.settings.jwt.secret,
             self.settings.jwt.refresh_token_ttl,
@@ -247,7 +247,7 @@ impl OAuthService {
                 Some(nonce.to_string())
             };
             Some(
-                crate::jwt::generate_rs256_jwt(
+                crate::services::jwt::generate_rs256_jwt(
                     username,
                     &self.rsa_key,
                     self.settings.jwt.access_token_ttl,
