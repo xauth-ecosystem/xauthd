@@ -77,3 +77,11 @@ register_chain = ["captcha", "register"]
 login_chain = ["password", "totp"]
 # Number of failed attempts allowed per step before the player is kicked
 max_attempts_per_step = 3
+
+[rate_limit]
+# Enable IP-based rate limiting on sensitive endpoints (login, register, grpc auth)
+enabled = true
+# Maximum number of authentication attempts allowed per IP address within the time window.
+max_attempts_per_ip = 10
+# Time window in seconds for the IP rate limit. Default: 60 (1 minute).
+window_seconds = 60
