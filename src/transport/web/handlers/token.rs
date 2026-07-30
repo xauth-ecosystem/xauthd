@@ -1,11 +1,14 @@
+use crate::db::UserRepository;
+use crate::services::oauth::{OAuthService, TokenRequest as OAuthTokenRequest};
+use crate::transport::web::{
+    dto::{TokenRequest, TokenResponse},
+    state::AppState,
+};
 use axum::{
     extract::{Form, State},
     response::IntoResponse,
     Json,
 };
-use crate::db::UserRepository;
-use crate::services::oauth::{OAuthService, TokenRequest as OAuthTokenRequest};
-use crate::transport::web::{dto::{TokenRequest, TokenResponse}, state::AppState};
 
 pub async fn token_post(
     State(state): State<AppState>,
@@ -17,7 +20,10 @@ pub async fn token_post(
         std::sync::Arc::new(state.rsa_key.clone()),
     );
 
-    if !oauth.validate_client(&req.client_id, &req.client_secret).await {
+    if !oauth
+        .validate_client(&req.client_id, &req.client_secret)
+        .await
+    {
         return (
             axum::http::StatusCode::UNAUTHORIZED,
             Json(serde_json::json!({"error": "invalid_client"})),

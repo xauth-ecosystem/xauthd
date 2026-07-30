@@ -1,7 +1,7 @@
 pub mod admin;
 
-use clap::{Parser, Subcommand};
 use admin::AdminCommands;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

@@ -1,5 +1,5 @@
-use crate::db::UserRepository;
 use crate::config::Settings;
+use crate::db::UserRepository;
 use std::sync::Arc;
 
 pub struct SessionService {

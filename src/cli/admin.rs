@@ -19,14 +19,22 @@ pub enum AdminCommands {
     },
 }
 
-pub async fn run(admin_cmd: &AdminCommands, db: DatabaseConnection) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run(
+    admin_cmd: &AdminCommands,
+    db: DatabaseConnection,
+) -> Result<(), Box<dyn std::error::Error>> {
     let settings = crate::config::Settings::new()?;
     let repo = crate::db::UserRepository::new(db);
 
     match admin_cmd {
-        AdminCommands::ResetPassword { username, new_password } => {
+        AdminCommands::ResetPassword {
+            username,
+            new_password,
+        } => {
             if let Some(user) = repo.get_user_by_name(username).await? {
-                let hash = crate::services::hash::hash_password(new_password, &settings.password_hashing).unwrap();
+                let hash =
+                    crate::services::hash::hash_password(new_password, &settings.password_hashing)
+                        .unwrap();
                 repo.update_password(user.id, &hash).await?;
                 tracing::info!("Password reset successfully for user '{}'.", username);
             } else {
@@ -54,7 +62,8 @@ pub async fn run(admin_cmd: &AdminCommands, db: DatabaseConnection) -> Result<()
             let client_id = URL_SAFE_NO_PAD.encode(id_bytes);
             let client_secret = URL_SAFE_NO_PAD.encode(secret_bytes);
 
-            repo.create_oauth_client(&client_id, &client_secret, redirect_uri).await?;
+            repo.create_oauth_client(&client_id, &client_secret, redirect_uri)
+                .await?;
 
             println!("OAuth2 Client '{}' created successfully!", name);
             println!("Client ID: {}", client_id);

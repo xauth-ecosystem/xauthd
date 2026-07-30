@@ -6,8 +6,8 @@ use std::sync::Arc;
 use tonic::transport::Server;
 use tracing::info;
 use xauth_core::cli::{Cli, Commands};
-use xauth_core::transport::grpc::XAuthCoreService;
 use xauth_core::migrator::Migrator;
+use xauth_core::transport::grpc::XAuthCoreService;
 use xauth_core::xauth_v1::auth_service_server::AuthServiceServer;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -74,8 +74,12 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 .add_service(AuthServiceServer::new(core_service))
                 .serve(addr);
 
-            let web_app =
-                xauth_core::transport::web::router(db.clone(), settings_arc, grpc_clients, pending_scopes);
+            let web_app = xauth_core::transport::web::router(
+                db.clone(),
+                settings_arc,
+                grpc_clients,
+                pending_scopes,
+            );
 
             let web_listener = tokio::net::TcpListener::bind(&settings.network.web_address).await?;
             info!(

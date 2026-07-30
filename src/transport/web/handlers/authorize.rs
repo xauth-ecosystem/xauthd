@@ -1,9 +1,9 @@
+use crate::db::UserRepository;
+use crate::transport::web::{dto::LoginQuery, state::AppState, templates::render_template};
 use axum::{
     extract::{Query, State},
     response::IntoResponse,
 };
-use crate::db::UserRepository;
-use crate::transport::web::{dto::LoginQuery, state::AppState, templates::render_template};
 
 pub async fn authorize_get(
     State(state): State<AppState>,

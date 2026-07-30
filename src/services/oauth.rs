@@ -1,5 +1,5 @@
-use crate::db::UserRepository;
 use crate::config::Settings;
+use crate::db::UserRepository;
 use rsa::RsaPrivateKey;
 use std::sync::Arc;
 
@@ -65,11 +65,7 @@ pub struct ValidationContext<'a> {
 }
 
 impl OAuthService {
-    pub fn new(
-        repo: UserRepository,
-        settings: Arc<Settings>,
-        rsa_key: Arc<RsaPrivateKey>,
-    ) -> Self {
+    pub fn new(repo: UserRepository, settings: Arc<Settings>, rsa_key: Arc<RsaPrivateKey>) -> Self {
         Self {
             repo,
             settings,
@@ -77,11 +73,7 @@ impl OAuthService {
         }
     }
 
-    pub async fn validate_client(
-        &self,
-        client_id: &str,
-        client_secret: &str,
-    ) -> bool {
+    pub async fn validate_client(&self, client_id: &str, client_secret: &str) -> bool {
         self.repo
             .validate_oauth_client(client_id, client_secret)
             .await
@@ -191,9 +183,7 @@ impl OAuthService {
             .map_err(|_| TokenError::InvalidGrant("User lookup failed".into()))?
             .ok_or_else(|| TokenError::InvalidGrant("User not found".into()))?;
 
-        let issued = self
-            .issue_tokens(&username, &existing.scopes, "")
-            .await?;
+        let issued = self.issue_tokens(&username, &existing.scopes, "").await?;
 
         self.repo.delete_oauth_token(refresh).await.ok();
         self.repo
@@ -284,4 +274,3 @@ impl OAuthService {
         }
     }
 }
-

@@ -19,11 +19,7 @@ impl OAuthClientRepository {
             .await
     }
 
-    pub async fn validate(
-        &self,
-        client_id: &str,
-        client_secret: &str,
-    ) -> Result<bool, DbErr> {
+    pub async fn validate(&self, client_id: &str, client_secret: &str) -> Result<bool, DbErr> {
         match self.get(client_id).await? {
             Some(c) => Ok(c.client_secret == client_secret),
             None => Ok(false),

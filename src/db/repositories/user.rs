@@ -199,7 +199,9 @@ impl UserRepository {
         ip: &str,
         expires_in_sec: i64,
     ) -> Result<(), DbErr> {
-        self.sessions.create(user_id, token, ip, expires_in_sec).await
+        self.sessions
+            .create(user_id, token, ip, expires_in_sec)
+            .await
     }
 
     pub async fn get_session(&self, token: &str) -> Result<Option<s_entities::Model>, DbErr> {
@@ -220,14 +222,18 @@ impl UserRepository {
         scopes: &str,
     ) -> Result<(), DbErr> {
         self.oauth_tokens
-            .create(client_id, user_id, access_token, refresh_token, expires_in_sec, scopes)
+            .create(
+                client_id,
+                user_id,
+                access_token,
+                refresh_token,
+                expires_in_sec,
+                scopes,
+            )
             .await
     }
 
-    pub async fn get_oauth_token(
-        &self,
-        token: &str,
-    ) -> Result<Option<ot_entities::Model>, DbErr> {
+    pub async fn get_oauth_token(&self, token: &str) -> Result<Option<ot_entities::Model>, DbErr> {
         self.oauth_tokens.get(token).await
     }
 

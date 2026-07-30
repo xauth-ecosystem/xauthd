@@ -1,10 +1,13 @@
+use crate::db::UserRepository;
+use crate::transport::web::{
+    dto::{LoginForm, LoginResponse},
+    state::AppState,
+};
 use axum::{
     extract::{Form, State},
     response::IntoResponse,
     Json,
 };
-use crate::db::UserRepository;
-use crate::transport::web::{dto::{LoginForm, LoginResponse}, state::AppState};
 
 pub async fn login_post(
     State(state): State<AppState>,

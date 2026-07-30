@@ -1,5 +1,5 @@
-use crate::db::UserRepository;
 use crate::config::Settings;
+use crate::db::UserRepository;
 use std::sync::Arc;
 
 pub enum StepOutcome {
@@ -62,11 +62,15 @@ impl AuthFlowService {
             if req.flow_token.is_empty() {
                 return Err(AuthFlowError::Unauthenticated("Missing flow_token".into()));
             }
-            let claims =
-                crate::services::jwt::validate_flow_token(&req.flow_token, &self.settings.jwt.secret)
-                    .map_err(|_| AuthFlowError::Unauthenticated("Invalid or expired flow_token".into()))?;
+            let claims = crate::services::jwt::validate_flow_token(
+                &req.flow_token,
+                &self.settings.jwt.secret,
+            )
+            .map_err(|_| AuthFlowError::Unauthenticated("Invalid or expired flow_token".into()))?;
             if claims.sub != req.username {
-                return Err(AuthFlowError::Unauthenticated("Token username mismatch".into()));
+                return Err(AuthFlowError::Unauthenticated(
+                    "Token username mismatch".into(),
+                ));
             }
             step_index = claims.step_index;
             chain_name = claims.chain;
@@ -106,7 +110,10 @@ impl AuthFlowService {
             "password" => self.handle_password(&req, step_index).await,
             "register" => self.handle_register(&req).await,
             "totp" => self.handle_totp(&req, &chain_name, step_index).await,
-            _ => Err(AuthFlowError::Fail(format!("Expected {}_complete", current_step))),
+            _ => Err(AuthFlowError::Fail(format!(
+                "Expected {}_complete",
+                current_step
+            ))),
         }?;
 
         let (success, step_completed) = match &result {
@@ -121,7 +128,11 @@ impl AuthFlowService {
         while step_index < chain.len() {
             let eval_step = &chain[step_index];
             if eval_step == "totp" {
-                let user = self.repo.get_user_by_name(&req.username).await.unwrap_or(None);
+                let user = self
+                    .repo
+                    .get_user_by_name(&req.username)
+                    .await
+                    .unwrap_or(None);
                 let has_2fa = if let Some(u) = &user {
                     self.repo.is_2fa_enabled(u.id).await.unwrap_or(false)
                 } else {
@@ -136,7 +147,11 @@ impl AuthFlowService {
         }
 
         if step_index >= chain.len() {
-            let user = self.repo.get_user_by_name(&req.username).await.unwrap_or(None);
+            let user = self
+                .repo
+                .get_user_by_name(&req.username)
+                .await
+                .unwrap_or(None);
             if let Some(u) = user {
                 let token = crate::services::jwt::generate_jwt(
                     &u.username,
@@ -153,7 +168,10 @@ impl AuthFlowService {
                     )
                     .await
                     .ok();
-                self.repo.update_last_login(u.id, &req.ip_address).await.ok();
+                self.repo
+                    .update_last_login(u.id, &req.ip_address)
+                    .await
+                    .ok();
 
                 return Ok(AuthStepResult {
                     success: true,
@@ -163,7 +181,9 @@ impl AuthFlowService {
                     flow_token: String::new(),
                 });
             } else {
-                return Err(AuthFlowError::Internal("User not found at end of flow".into()));
+                return Err(AuthFlowError::Internal(
+                    "User not found at end of flow".into(),
+                ));
             }
         }
 
@@ -230,8 +250,9 @@ impl AuthFlowService {
     }
 
     async fn handle_register(&self, req: &AuthStepInput) -> Result<StepOutcome, AuthFlowError> {
-        let hash = crate::services::hash::hash_password(&req.input_data, &self.settings.password_hashing)
-            .map_err(|_| AuthFlowError::Internal("Hash failed".into()))?;
+        let hash =
+            crate::services::hash::hash_password(&req.input_data, &self.settings.password_hashing)
+                .map_err(|_| AuthFlowError::Internal("Hash failed".into()))?;
         if self.repo.create_user(&req.username, &hash).await.is_ok() {
             Ok(StepOutcome::Ok)
         } else {
@@ -245,7 +266,11 @@ impl AuthFlowService {
         chain_name: &str,
         step_index: usize,
     ) -> Result<StepOutcome, AuthFlowError> {
-        let user = self.repo.get_user_by_name(&req.username).await.unwrap_or(None);
+        let user = self
+            .repo
+            .get_user_by_name(&req.username)
+            .await
+            .unwrap_or(None);
         let has_2fa = if let Some(u) = &user {
             self.repo.is_2fa_enabled(u.id).await.unwrap_or(false)
         } else {

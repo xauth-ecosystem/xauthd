@@ -59,7 +59,8 @@ impl AuthService for XAuthCoreService {
             self.clients.clone(),
             self.pending_scope_requests.clone(),
             request,
-        ).await
+        )
+        .await
     }
 
     async fn process_auth_step(
@@ -162,7 +163,10 @@ impl AuthService for XAuthCoreService {
             refresh_token: None,
         };
 
-        if !oauth.validate_client(&req.client_id, &req.client_secret).await {
+        if !oauth
+            .validate_client(&req.client_id, &req.client_secret)
+            .await
+        {
             return Ok(Response::new(OAuthTokenResponse {
                 success: false,
                 access_token: "".into(),
@@ -204,9 +208,8 @@ impl AuthService for XAuthCoreService {
         request: Request<PlayerInfoRequest>,
     ) -> Result<Response<PlayerInfoResponse>, Status> {
         let req = request.into_inner();
-        let svc = crate::services::user_info::UserInfoService::new(
-            UserRepository::new(self.db.clone()),
-        );
+        let svc =
+            crate::services::user_info::UserInfoService::new(UserRepository::new(self.db.clone()));
 
         match svc.get_player_info(&req.target_username).await {
             Ok(info) => Ok(Response::new(PlayerInfoResponse {
@@ -227,9 +230,8 @@ impl AuthService for XAuthCoreService {
         request: Request<ForcePasswordChangeRequest>,
     ) -> Result<Response<ForcePasswordChangeResponse>, Status> {
         let req = request.into_inner();
-        let svc = crate::services::user_info::UserInfoService::new(
-            UserRepository::new(self.db.clone()),
-        );
+        let svc =
+            crate::services::user_info::UserInfoService::new(UserRepository::new(self.db.clone()));
 
         match svc.force_password_change(&req.target_username).await {
             Ok(true) => {
@@ -246,7 +248,9 @@ impl AuthService for XAuthCoreService {
                 }
                 Ok(Response::new(ForcePasswordChangeResponse { success: true }))
             }
-            Ok(false) => Ok(Response::new(ForcePasswordChangeResponse { success: false })),
+            Ok(false) => Ok(Response::new(ForcePasswordChangeResponse {
+                success: false,
+            })),
             Err(e) => Err(Status::internal(e)),
         }
     }

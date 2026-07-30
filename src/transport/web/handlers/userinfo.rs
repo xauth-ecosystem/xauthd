@@ -1,13 +1,9 @@
-use axum::{
-    extract::State,
-    response::IntoResponse,
-    Json,
-};
 use crate::db::UserRepository;
 use crate::transport::grpc::ClientSender;
-use crate::xauth_v1::{core_command::CommandType, CoreCommand};
-use tokio::sync::oneshot;
 use crate::transport::web::state::AppState;
+use crate::xauth_v1::{core_command::CommandType, CoreCommand};
+use axum::{extract::State, response::IntoResponse, Json};
+use tokio::sync::oneshot;
 
 pub async fn user_get(
     State(state): State<AppState>,
@@ -18,7 +14,9 @@ pub async fn user_get(
     if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
         if let Ok(auth_str) = auth_header.to_str() {
             if let Some(token) = auth_str.strip_prefix("Bearer ") {
-                if let Ok(claims) = crate::services::jwt::validate_jwt(token, &state.settings.jwt.secret) {
+                if let Ok(claims) =
+                    crate::services::jwt::validate_jwt(token, &state.settings.jwt.secret)
+                {
                     if !repo
                         .is_token_blacklisted(&claims.jti)
                         .await
@@ -65,7 +63,9 @@ pub async fn user_get(
                                 payload,
                             };
 
-                            let clients_guard: tokio::sync::RwLockReadGuard<std::collections::HashMap<String, ClientSender>> = state.grpc_clients.read().await;
+                            let clients_guard: tokio::sync::RwLockReadGuard<
+                                std::collections::HashMap<String, ClientSender>,
+                            > = state.grpc_clients.read().await;
 
                             // Broadcast to all connected Minecraft servers
                             for client in clients_guard.values() {
