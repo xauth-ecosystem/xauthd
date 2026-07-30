@@ -119,7 +119,7 @@ impl AuthFlowService {
                         current_step
                     )))
                 }
-            },
+            }
         }?;
 
         let (success, step_completed) = match &result {

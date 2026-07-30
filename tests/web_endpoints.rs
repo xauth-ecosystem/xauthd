@@ -32,8 +32,12 @@ fn build_auth_code(
         "n": nonce
     }))
     .unwrap();
-    xauth_core::services::jwt::generate_jwt(&subject, &settings.jwt.secret, settings.jwt.auth_code_ttl)
-        .unwrap()
+    xauth_core::services::jwt::generate_jwt(
+        &subject,
+        &settings.jwt.secret,
+        settings.jwt.auth_code_ttl,
+    )
+    .unwrap()
 }
 
 fn build_test_router(
