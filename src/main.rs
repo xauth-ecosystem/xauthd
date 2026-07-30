@@ -59,7 +59,7 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             info!("Migrations applied successfully.");
 
             let settings_arc = Arc::new(settings.clone());
-            let rsa_key = Arc::new(xauth_core::jwt::get_or_create_rsa_key(
+            let rsa_key = Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
                 &settings_arc.jwt.rsa_private_key_path,
             ));
             let core_service = XAuthCoreService::new(db.clone(), settings_arc.clone(), rsa_key);
