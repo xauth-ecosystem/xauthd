@@ -56,7 +56,7 @@ pub async fn consent_post(
             "n": f.nonce
         }))
         .unwrap_or_default();
-        let code = crate::jwt::generate_jwt(
+        let code = crate::services::jwt::generate_jwt(
             &subject,
             &state.settings.jwt.secret,
             state.settings.jwt.auth_code_ttl,
