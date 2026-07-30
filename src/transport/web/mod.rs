@@ -40,7 +40,7 @@ pub fn router(
         );
     }
 
-    let rsa_key = crate::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path);
+    let rsa_key = crate::services::jwt::get_or_create_rsa_key(&settings.jwt.rsa_private_key_path);
     let state = Arc::new(AppStateInner {
         db,
         templates_dir: settings.web.templates_dir.clone(),
