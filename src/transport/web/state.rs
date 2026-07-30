@@ -1,4 +1,4 @@
-use crate::grpc_service::{ClientSender, PendingScopeMap};
+use crate::transport::grpc::{ClientSender, PendingScopeMap};
 use sea_orm::DatabaseConnection;
 use std::collections::HashMap;
 use std::sync::Arc;
