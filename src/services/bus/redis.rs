@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 pub struct RedisBus {
-    client: RedisClient,
+    client: Client,
 }
 
 impl RedisBus {
@@ -16,8 +16,8 @@ impl RedisBus {
         url: &str,
         clients: Arc<RwLock<HashMap<String, ClientSender>>>,
     ) -> Result<Self, String> {
-        let config = RedisConfig::from_url(url).map_err(|e| e.to_string())?;
-        let client = RedisClient::new(config, None, None, None);
+        let config = Config::from_url(url).map_err(|e| e.to_string())?;
+        let client = Client::new(config, None, None, None);
         let _ = client.connect();
         client.wait_for_connect().await.map_err(|e| e.to_string())?;
 
@@ -26,7 +26,7 @@ impl RedisBus {
 
         tokio::spawn(async move {
             let _ = sub_client.subscribe("xauthd:commands").await;
-            let mut pubsub_stream = sub_client.on_message();
+            let mut pubsub_stream = sub_client.message_rx();
 
             while let Ok(msg) = pubsub_stream.recv().await {
                 if let Some(bytes) = msg.value.as_bytes() {
@@ -48,9 +48,9 @@ impl RedisBus {
 impl MessageBus for RedisBus {
     async fn broadcast(&self, cmd: CoreCommand) -> Result<(), String> {
         let mut buf = Vec::new();
-        cmd.encode(&mut buf);
+        let _ = cmd.encode(&mut buf);
         self.client
-            .publish("xauthd:commands", buf)
+            .publish::<(), _, _>("xauthd:commands", buf)
             .await
             .map_err(|e| e.to_string())?;
         Ok(())
