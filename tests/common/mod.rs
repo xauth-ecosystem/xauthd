@@ -32,7 +32,13 @@ pub async fn setup_test_db() -> DatabaseConnection {
 
 pub fn get_test_settings() -> Arc<Settings> {
     Arc::new(Settings {
-        database: DatabaseSettings { url: "".into() },
+        database: DatabaseSettings {
+            url: "sqlite::memory:".to_string(),
+        },
+        redis: xauth_core::config::RedisSettings {
+            enabled: false,
+            url: "redis://127.0.0.1:6379".to_string(),
+        },
         network: NetworkSettings {
             grpc_address: "".into(),
             web_address: "".into(),
