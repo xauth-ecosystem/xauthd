@@ -10,6 +10,12 @@ pub struct DatabaseSettings {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct RedisSettings {
+    pub enabled: bool,
+    pub url: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct NetworkSettings {
     pub grpc_address: String,
     pub web_address: String,
@@ -86,6 +92,7 @@ pub struct RateLimitSettings {
 #[derive(Debug, Deserialize, Clone)]
 pub struct Settings {
     pub database: DatabaseSettings,
+    pub redis: RedisSettings,
     pub network: NetworkSettings,
     pub password_hashing: PasswordHashingSettings,
     pub jwt: JwtSettings,
