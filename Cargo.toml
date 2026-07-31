@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "XAuth Core Daemon for PocketMine-MP"
 authors = ["Serhii Cherneha"]
 license-file = "LICENSE"
+repository = "https://github.com/xauth-ecosystem/xauthd"
 edition = "2021"
 publish = false
 
