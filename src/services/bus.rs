@@ -1,3 +1,5 @@
+pub mod local;
+
 use crate::xauth_v1::CoreCommand;
 
 #[tonic::async_trait]
