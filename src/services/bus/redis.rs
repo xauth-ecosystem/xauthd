@@ -18,7 +18,7 @@ impl RedisBus {
     ) -> Result<Self, String> {
         let config = Config::from_url(url).map_err(|e| e.to_string())?;
         let client = Client::new(config, None, None, None);
-        let _ = client.connect();
+        let _task = client.connect();
         client.wait_for_connect().await.map_err(|e| e.to_string())?;
 
         let sub_client = client.clone();
