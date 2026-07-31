@@ -1,4 +1,5 @@
 pub mod local;
+pub mod redis;
 
 use crate::xauth_v1::CoreCommand;
 
