@@ -36,6 +36,7 @@ message AuthStepResponse {
     string next_action = 3;
     string session_token = 4;
     string flow_token = 5;
+    string action_payload = 6;
 }
 
 message SessionRequest {
