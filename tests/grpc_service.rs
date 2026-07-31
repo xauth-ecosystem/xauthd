@@ -23,7 +23,8 @@ async fn test_process_auth_step_init_register() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let req = Request::new(AuthStepRequest {
         username: "new_player".into(),
@@ -56,7 +57,8 @@ async fn test_process_auth_step_init_login() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let req = Request::new(AuthStepRequest {
         username: "existing_player".into(),
@@ -91,7 +93,8 @@ async fn test_process_auth_step_password_correct() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let flow_token = xauth_core::services::jwt::generate_flow_token(
         "player1",
@@ -136,7 +139,8 @@ async fn test_process_auth_step_password_incorrect() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let flow_token = xauth_core::services::jwt::generate_flow_token(
         "player2",
@@ -186,7 +190,8 @@ async fn test_process_auth_step_password_locked_account() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let flow_token = xauth_core::services::jwt::generate_flow_token(
         "locked_player",
@@ -227,7 +232,8 @@ async fn test_process_auth_step_register_success() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let flow_token = xauth_core::services::jwt::generate_flow_token(
         "new_player",
@@ -275,7 +281,8 @@ async fn test_process_auth_step_register_user_exists() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let flow_token = xauth_core::services::jwt::generate_flow_token(
         "existing_player",
@@ -320,7 +327,8 @@ async fn test_process_auth_step_totp_skip() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let flow_token = xauth_core::services::jwt::generate_flow_token(
         "player_no_2fa",
@@ -364,7 +372,8 @@ async fn test_process_auth_step_custom_step() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let flow_token = xauth_core::services::jwt::generate_flow_token(
         "player1",
@@ -424,7 +433,8 @@ async fn test_validate_session() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let req = Request::new(SessionRequest {
         session_token: token,
@@ -472,7 +482,8 @@ async fn test_end_session() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let req = Request::new(EndSessionRequest {
         username: "session_user2".into(),
@@ -522,7 +533,8 @@ async fn test_generate_o_auth_token() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let req = Request::new(OAuthTokenRequest {
         client_id: "my_client".into(),
@@ -552,7 +564,8 @@ async fn test_generate_o_auth_token_invalid_client() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let req = Request::new(OAuthTokenRequest {
         client_id: "bad_client".into(),
@@ -586,7 +599,8 @@ async fn test_generate_o_auth_token_invalid_code() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let req = Request::new(OAuthTokenRequest {
         client_id: "my_client2".into(),
@@ -643,7 +657,8 @@ async fn test_revoke_o_auth_token() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let req = Request::new(OAuthRevokeRequest {
         token: token.clone(),
@@ -670,7 +685,8 @@ async fn test_get_player_info_not_found() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let req = Request::new(PlayerInfoRequest {
         target_username: "unknown".into(),
@@ -698,7 +714,8 @@ async fn test_get_player_info_exists() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let req = Request::new(PlayerInfoRequest {
         target_username: "known_user".into(),
@@ -725,7 +742,8 @@ async fn test_force_password_change() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let req = Request::new(ForcePasswordChangeRequest {
         target_username: "force_pw_player".into(),
@@ -757,7 +775,8 @@ async fn test_force_password_change_user_not_found() {
         std::sync::Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
             &settings.jwt.rsa_private_key_path,
         )),
-    );
+    )
+    .await;
 
     let req = Request::new(ForcePasswordChangeRequest {
         target_username: "nonexistent".into(),
