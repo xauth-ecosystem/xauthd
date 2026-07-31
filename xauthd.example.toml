@@ -9,6 +9,16 @@
 # Postgres:  postgres://user:password@localhost/xauth
 url = "sqlite://data.sqlite?mode=rwc"
 
+[redis]
+# If enabled, xauthd switches to Cluster Mode for horizontal scalability.
+# This uses Redis Pub/Sub as a MessageBus to synchronize bidirectional
+# gRPC streaming connections (like KICK_PLAYER commands) across all running instances.
+# Leave disabled if you are only running a single instance of xauthd.
+enabled = false
+# The connection string for the Redis server.
+# Example: redis://user:password@localhost:6379/
+url = "redis://127.0.0.1:6379/"
+
 [network]
 # Address and port for the gRPC daemon (backend communication)
 grpc_address = "0.0.0.0:50051"
