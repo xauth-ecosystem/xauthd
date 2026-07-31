@@ -131,6 +131,20 @@ We provide a `Dockerfile` and a `docker-compose.yml` for containerized environme
    ```
 4. View logs with: `docker-compose logs -f`
 
+### Option C: Cluster Mode (Horizontal Scaling)
+
+By default, `xauthd` runs in Standalone mode, holding all gRPC connections and broadcasting events in-memory. For large networks, you can run multiple `xauthd` instances behind a load balancer (e.g., HAProxy, Nginx, or Kubernetes Ingress).
+
+To synchronize commands (such as dynamically resolving scopes or forcing password changes) across all game servers connected to different `xauthd` nodes, enable Redis in your `xauthd.toml`:
+
+```toml
+[redis]
+enabled = true
+url = "redis://127.0.0.1:6379"
+```
+
+When enabled, `xauthd` utilizes Redis Pub/Sub to instantly broadcast gRPC commands across the entire cluster, ensuring consistent state and behavior regardless of which instance a game server is connected to.
+
 ## Authentication Chains (Auth Flow)
 
 In `xauthd.toml`, you can flexibly define the sequence of steps for players:
