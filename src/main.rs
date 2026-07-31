@@ -62,7 +62,8 @@ async fn async_main(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             let rsa_key = Arc::new(xauth_core::services::jwt::get_or_create_rsa_key(
                 &settings_arc.jwt.rsa_private_key_path,
             ));
-            let core_service = XAuthCoreService::new(db.clone(), settings_arc.clone(), rsa_key);
+            let core_service =
+                XAuthCoreService::new(db.clone(), settings_arc.clone(), rsa_key).await;
 
             let grpc_clients = core_service.clients.clone();
             let pending_scopes = core_service.pending_scope_requests.clone();
