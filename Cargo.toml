@@ -1,6 +1,8 @@
 [package]
 name = "xauth-core"
 version = "0.1.0"
+description = "XAuth Core Daemon for PocketMine-MP"
+license-file = "LICENSE"
 edition = "2021"
 publish = false
 
