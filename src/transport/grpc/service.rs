@@ -112,6 +112,7 @@ impl AuthService for XAuthCoreService {
                 next_action: result.next_action,
                 session_token: result.session_token,
                 flow_token: result.flow_token,
+                action_payload: result.action_payload,
             })),
             Err(crate::services::auth_flow::AuthFlowError::Unauthenticated(msg)) => {
                 Err(Status::unauthenticated(msg))
@@ -134,6 +135,7 @@ impl AuthService for XAuthCoreService {
                 next_action: "require_totp".into(),
                 session_token: String::new(),
                 flow_token,
+                action_payload: String::new(),
             })),
         }
     }
