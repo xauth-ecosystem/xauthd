@@ -15,6 +15,7 @@ A centralized authentication microservice for PocketMine-MP servers, written in 
 - **Stateless Flow Tracking:** The player's progress is securely passed using JWT tokens (`flow_token`), allowing `xauthd` to easily run in a multi-instance setup without bloating the database with dead sessions.
 - **Built-in OAuth2 Provider:** Generates Access and Refresh tokens for secure authentication across web dashboards and other integrations.
 - **gRPC API:** Lightning-fast messaging with PocketMine-MP instances via `xauth.proto`.
+- **Horizontal Scalability (Cluster Mode):** Built-in Redis Pub/Sub integration (`MessageBus`) synchronizes gRPC events across all connected instances, allowing you to run multiple `xauthd` nodes behind a load balancer for high availability.
 
 ## Installation & Usage
 
