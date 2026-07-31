@@ -20,7 +20,7 @@ impl MessageBus for LocalBus {
     async fn broadcast(&self, cmd: CoreCommand) -> Result<(), String> {
         let clients_guard = self.clients.read().await;
         for tx in clients_guard.values() {
-            // We ignore errors here since if a client disconnected, 
+            // We ignore errors here since if a client disconnected,
             // the streaming layer handles removing it.
             let _ = tx.send(Ok(cmd.clone())).await;
         }
