@@ -1,7 +1,7 @@
 [package]
 name = "xauth-core"
 version = "0.1.0"
-description = "XAuth Core Daemon for PocketMine-MP"
+description = "XAuth Core Authentication Daemon"
 authors = ["Serhii Cherneha"]
 license-file = "LICENSE"
 repository = "https://github.com/xauth-ecosystem/xauthd"
