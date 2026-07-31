@@ -22,23 +22,37 @@ pub struct XAuthCoreService {
     pub clients: Arc<RwLock<HashMap<String, ClientSender>>>,
     pub pending_scope_requests: PendingScopeMap,
     pub rate_limiter: crate::services::rate_limit::RateLimiter,
+    pub bus: Arc<dyn crate::services::bus::MessageBus>,
 }
 
 impl XAuthCoreService {
-    pub fn new(
+    pub async fn new(
         db: DatabaseConnection,
         settings: Arc<crate::config::Settings>,
         rsa_key: Arc<rsa::RsaPrivateKey>,
     ) -> Self {
         let rate_limiter =
             crate::services::rate_limit::RateLimiter::new(settings.rate_limit.clone());
+        let clients = Arc::new(RwLock::new(HashMap::new()));
+
+        let bus: Arc<dyn crate::services::bus::MessageBus> = if settings.redis.enabled {
+            let redis_bus =
+                crate::services::bus::redis::RedisBus::new(&settings.redis.url, clients.clone())
+                    .await
+                    .expect("Failed to connect to Redis MessageBus");
+            Arc::new(redis_bus)
+        } else {
+            Arc::new(crate::services::bus::local::LocalBus::new(clients.clone()))
+        };
+
         Self {
             db,
             settings,
             rsa_key,
-            clients: Arc::new(RwLock::new(HashMap::new())),
+            clients,
             pending_scope_requests: Arc::new(RwLock::new(HashMap::new())),
             rate_limiter,
+            bus,
         }
     }
 
@@ -267,10 +281,7 @@ impl AuthService for XAuthCoreService {
                         target_username: req.target_username.clone(),
                         payload: "You must change your password. Please re-login.".into(),
                     };
-                    let clients_guard = self.clients.read().await;
-                    for tx in clients_guard.values() {
-                        let _ = tx.send(Ok(cmd.clone())).await;
-                    }
+                    let _ = self.bus.broadcast(cmd).await;
                 }
                 Ok(Response::new(ForcePasswordChangeResponse { success: true }))
             }
