@@ -22,6 +22,7 @@ pub struct AuthStepResult {
     pub next_action: String,
     pub session_token: String,
     pub flow_token: String,
+    pub action_payload: String,
 }
 
 pub struct AuthFlowService {
@@ -103,6 +104,7 @@ impl AuthFlowService {
                 next_action: format!("require_{}", current_step),
                 session_token: String::new(),
                 flow_token: new_flow_token,
+                action_payload: String::new(),
             });
         }
 
@@ -185,6 +187,7 @@ impl AuthFlowService {
                     next_action: "authenticated".into(),
                     session_token: token,
                     flow_token: String::new(),
+                    action_payload: String::new(),
                 });
             } else {
                 return Err(AuthFlowError::Internal(
@@ -214,6 +217,7 @@ impl AuthFlowService {
             next_action: format!("require_{}", next_step),
             session_token: String::new(),
             flow_token: new_flow_token,
+            action_payload: String::new(),
         })
     }
 
