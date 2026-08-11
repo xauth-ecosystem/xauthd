@@ -351,8 +351,7 @@ impl AuthFlowService {
                     .map_err(|_| AuthFlowError::Internal("Invalid TOTP secret".into()))?,
             )
             .map_err(|_| AuthFlowError::Internal("TOTP init failed".into()))?;
-            if totp.check_current(&req.input_data).is_some()
-            {
+            if totp.check_current(&req.input_data).is_some() {
                 Ok(StepOutcome::Ok)
             } else {
                 Ok(StepOutcome::Fail("Invalid TOTP code".into()))
