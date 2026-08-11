@@ -295,22 +295,20 @@ impl AuthFlowService {
             let u = user
                 .as_ref()
                 .ok_or_else(|| AuthFlowError::Internal("User not found".into()))?;
-            let secret = totp_rs::Secret::generate_secret();
-            let totp = totp_rs::TOTP::new(
-                totp_rs::Algorithm::SHA1,
-                6,
-                1,
-                30,
-                secret
-                    .to_bytes()
-                    .map_err(|_| AuthFlowError::Internal("Secret error".into()))?,
-            )
-            .map_err(|_| AuthFlowError::Internal("TOTP generation failed".into()))?;
+            let secret = totp_rs::Secret::generate();
+            let totp = totp_rs::Builder::new()
+                .with_algorithm(totp_rs::Algorithm::SHA1)
+                .with_digits(6)
+                .with_skew(1)
+                .with_step_duration(30)
+                .with_secret(secret.as_bytes())
+                .build()
+                .map_err(|_| AuthFlowError::Internal("TOTP generation failed".into()))?;
             let otpauth_uri = format!(
                 "otpauth://totp/{}:{}?secret={}&issuer={}",
                 "xauthd",
                 req.username,
-                totp.get_secret_base32(),
+                totp.secret().to_base32(),
                 "xauthd"
             );
             let new_flow_token = crate::services::jwt::generate_flow_token(
@@ -322,7 +320,7 @@ impl AuthFlowService {
             )
             .map_err(|_| AuthFlowError::Internal("Token failed".into()))?;
             self.repo
-                .set_totp_secret(u.id, &totp.get_secret_base32())
+                .set_totp_secret(u.id, &totp.secret().to_base32())
                 .await
                 .map_err(|_| AuthFlowError::Internal("Failed to save TOTP secret".into()))?;
             return Err(AuthFlowError::TotpInit {
@@ -341,16 +339,14 @@ impl AuthFlowService {
                 .ok_or_else(|| AuthFlowError::Internal("2FA not configured".into()))?;
             let secret = totp_rs::Secret::try_from_base32(secret_b32.clone())
                 .map_err(|_| AuthFlowError::Internal("Invalid TOTP secret".into()))?;
-            let totp = totp_rs::TOTP::new(
-                totp_rs::Algorithm::SHA1,
-                6,
-                1,
-                30,
-                secret
-                    .to_bytes()
-                    .map_err(|_| AuthFlowError::Internal("Invalid TOTP secret".into()))?,
-            )
-            .map_err(|_| AuthFlowError::Internal("TOTP init failed".into()))?;
+            let totp = totp_rs::Builder::new()
+                .with_algorithm(totp_rs::Algorithm::SHA1)
+                .with_digits(6)
+                .with_skew(1)
+                .with_step_duration(30)
+                .with_secret(secret)
+                .build()
+                .map_err(|_| AuthFlowError::Internal("TOTP init failed".into()))?;
             if totp.check_current(&req.input_data).is_some() {
                 Ok(StepOutcome::Ok)
             } else {
