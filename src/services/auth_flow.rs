@@ -339,7 +339,8 @@ impl AuthFlowService {
                 .totp_secret
                 .as_ref()
                 .ok_or_else(|| AuthFlowError::Internal("2FA not configured".into()))?;
-            let secret = totp_rs::Secret::Encoded(secret_b32.clone());
+            let secret = totp_rs::Secret::try_from_base32(secret_b32.clone())
+                .map_err(|_| AuthFlowError::Internal("Invalid TOTP secret".into()))?;
             let totp = totp_rs::TOTP::new(
                 totp_rs::Algorithm::SHA1,
                 6,
@@ -350,9 +351,7 @@ impl AuthFlowService {
                     .map_err(|_| AuthFlowError::Internal("Invalid TOTP secret".into()))?,
             )
             .map_err(|_| AuthFlowError::Internal("TOTP init failed".into()))?;
-            if totp
-                .check_current(&req.input_data)
-                .map_err(|_| AuthFlowError::Internal("TOTP verification error".into()))?
+            if totp.check_current(&req.input_data).is_some()
             {
                 Ok(StepOutcome::Ok)
             } else {
