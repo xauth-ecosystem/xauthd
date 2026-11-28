@@ -1,6 +1,6 @@
 use crate::config::PasswordHashingSettings;
 use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    password_hash::{phc::PasswordHash, PasswordHasher, PasswordVerifier},
     Argon2, Params,
 };
 use bcrypt::{hash as bcrypt_hash, verify as bcrypt_verify, DEFAULT_COST};
@@ -37,8 +37,6 @@ pub fn hash_password(password: &str, config: &PasswordHashingSettings) -> Result
         bcrypt_hash(password, cost).map_err(|e| format!("Bcrypt hashing error: {}", e))
     } else {
         // Default to Argon2id
-        let salt = SaltString::generate(&mut OsRng);
-
         let argon2 =
             if let Some(Some(argon_opts)) = config.options.as_ref().map(|o| o.argon2id.as_ref()) {
                 let params = Params::new(
@@ -53,7 +51,7 @@ pub fn hash_password(password: &str, config: &PasswordHashingSettings) -> Result
                 Argon2::default()
             };
 
-        match argon2.hash_password(password.as_bytes(), &salt) {
+        match argon2.hash_password(password.as_bytes()) {
             Ok(hash) => Ok(hash.to_string()),
             Err(e) => Err(format!("Argon2 hashing error: {}", e)),
         }
